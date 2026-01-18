@@ -1,29 +1,187 @@
----@class haunt.Module
----@field get_config fun(): HauntConfig
----@field setup fun(opts?: HauntConfig): nil
----@field is_setup fun(): boolean
+-- ===========================================================================
+-- haunt.nvim - Bookmark management for Neovim
+--
+-- MIT License. See LICENSE file for details.
+-- ===========================================================================
+
+---@tag haunt.nvim
+---@tag haunt
+---@toc_entry Introduction
+---@toc
+
+---@text
+--- # Introduction ~
+---
+--- haunt.nvim is a powerful and elegant bookmark management plugin for Neovim.
+--- It allows you to mark important lines in your code, navigate between them
+--- effortlessly, and add contextual annotations - all persisted per git branch.
+---
+--- Features:
+---   - Smart bookmarking with a single command
+---   - Quick navigation between bookmarks
+---   - Rich annotations displayed as virtual text
+---   - Git-aware persistence (per repository and branch)
+---   - Visual indicators (customizable signs and inline annotations)
+---   - Automatic line tracking as you edit
+---   - Zero configuration required
+---
+--- # Quick Start ~
+---                                                           *haunt-quickstart*
+---
+--- After installation, haunt.nvim works out of the box with sensible defaults.
+---
+--- Basic usage: >lua
+---   -- Add an annotation (creates bookmark if needed)
+---   require('haunt.api').annotate()
+---
+---   -- Navigate to the next bookmark
+---   require('haunt.api').next()
+---
+---   -- Navigate to the previous bookmark
+---   require('haunt.api').prev()
+---
+---   -- Toggle annotation visibility
+---   require('haunt.api').toggle()
+---
+---   -- Delete bookmark at current line
+---   require('haunt.api').delete()
+---
+---   -- Clear all bookmarks in current file
+---   require('haunt.api').clear()
+--- <
+---
+--- Or use the provided commands: >vim
+---   :HauntAnnotate
+---   :HauntNext
+---   :HauntPrev
+---   :HauntToggle
+---   :HauntDelete
+---   :HauntList
+---   :HauntClear
+---   :HauntClearAll
+--- <
+---
+--- # Recommended Keymaps ~
+---                                                             *haunt-keymaps*
+--- >lua
+---   -- Toggle bookmark annotation visibility
+---   vim.keymap.set('n', 'mm', function() require('haunt.api').toggle() end,
+---     { desc = "Toggle bookmark annotation" })
+---
+---   -- Navigate bookmarks
+---   vim.keymap.set('n', 'mn', function() require('haunt.api').next() end,
+---     { desc = "Next bookmark" })
+---   vim.keymap.set('n', 'mp', function() require('haunt.api').prev() end,
+---     { desc = "Previous bookmark" })
+---
+---   -- Annotate bookmark
+---   vim.keymap.set('n', 'ma', function() require('haunt.api').annotate() end,
+---     { desc = "Annotate bookmark" })
+---
+---   -- Delete bookmark
+---   vim.keymap.set('n', 'md', function() require('haunt.api').delete() end,
+---     { desc = "Delete bookmark" })
+---
+---   -- Clear bookmarks
+---   vim.keymap.set('n', 'mc', function() require('haunt.api').clear() end,
+---     { desc = "Clear bookmarks in file" })
+---   vim.keymap.set('n', 'mC', function() require('haunt.api').clear_all() end,
+---     { desc = "Clear all bookmarks" })
+---
+---   -- List bookmarks
+---   vim.keymap.set('n', 'ml', function() require('haunt.picker').show() end,
+---     { desc = "List bookmarks" })
+--- <
+---
+--- # Persistence ~
+---                                                          *haunt-persistence*
+---
+--- Bookmarks are automatically saved and loaded:
+---   - Location: `~/.local/share/nvim/haunt/` (or custom data_dir)
+---   - Format: JSON files named by git repo + branch hash
+---   - Auto-save: On buffer hide and Neovim exit
+---   - Per-branch: Each git branch has its own bookmark set
+---
+--- This means you can:
+---   - Switch branches without losing bookmarks
+---   - Have different bookmarks for different features
+---   - Share bookmark files with your team (optional)
+---
+--- # Troubleshooting ~
+---                                                       *haunt-troubleshooting*
+---
+--- Bookmarks not persisting: ~
+---
+--- Make sure you're in a git repository with an active branch.
+--- haunt.nvim uses git to determine where to save bookmarks.
+--- If not in a git repo, bookmarks are stored per working directory.
+---
+--- Signs not showing: ~
+---
+--- 1. Verify signs are enabled in your terminal/GUI
+--- 2. Check if another plugin is using the sign column
+--- 3. Ensure your colorscheme defines the highlight groups
+---
+--- Bookmarks at wrong lines after editing: ~
+---
+--- This shouldn't happen as bookmarks use extmarks that track line changes.
+--- If it does occur, save your bookmarks and restart Neovim.
+---
+--- Picker not working: ~
+---
+--- The picker requires Snacks.nvim (https://github.com/folke/snacks.nvim).
+--- Install it via your plugin manager.
+
+---@private
 local M = {}
 
--- Module-level configuration
-local config = nil
+local config = require("haunt.config")
 
---- Default configuration
----@class HauntConfig
----@field sign? string The icon to display for bookmarks (default: '󰃀')
----@field sign_hl? string The highlight group for the sign text (default: 'DiagnosticInfo')
----@field virt_text_hl? string The highlight group for virtual text annotations (default: 'Comment')
----@field data_dir? string|nil Custom data directory path (default: vim.fn.stdpath("data") .. "/haunt/")
----@field picker_keys? table<string, table> Keybindings for picker actions (default: {delete = {key = 'd', mode = {'n'}}, edit_annotation = {key = 'a', mode = {'n'}}})
-local DEFAULT_CONFIG = {
-	sign = "󰃀",
-	sign_hl = "DiagnosticInfo",
-	virt_text_hl = "Comment",
-	data_dir = nil, -- Will use default from persistence layer if nil
-	picker_keys = {
-		delete = { key = "d", mode = { "n" } },
-		edit_annotation = { key = "a", mode = { "n" } },
-	},
-}
+-- Track initialization state
+local _initialized = false
+
+---@private
+function M._has_potential_bookmarks()
+	local data_dir = config.DEFAULT_DATA_DIR
+	if vim.fn.isdirectory(data_dir) == 0 then
+		return false
+	end
+	local files = vim.fn.glob(data_dir .. "*.json", false, true)
+	return #files > 0
+end
+
+---@private
+function M._ensure_initialized()
+	if _initialized then
+		return
+	end
+	_initialized = true
+
+	local display = require("haunt.display")
+	display.setup_signs(config.get())
+end
+
+---@private
+function M._setup_restoration_autocmd()
+	local augroup = vim.api.nvim_create_augroup("haunt_restore", { clear = true })
+	vim.api.nvim_create_autocmd("BufReadPost", {
+		group = augroup,
+		callback = function(args)
+			M._ensure_initialized()
+			require("haunt.api").restore_buffer_bookmarks(args.buf)
+		end,
+		desc = "Restore bookmark visuals when buffers are opened",
+	})
+
+	-- Restore bookmarks for already-loaded buffers (they missed BufReadPost)
+	M._ensure_initialized()
+	local api = require("haunt.api")
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) then
+			api.restore_buffer_bookmarks(bufnr)
+		end
+	end
+end
 
 -- Check if any bookmarks exist
 -- This prevents unnecessary writes when there are no bookmarks
@@ -38,13 +196,11 @@ local function has_bookmarks()
 	return #bookmarks > 0
 end
 
--- Save all bookmarks
 local function save_all_bookmarks()
 	if not has_bookmarks() then
 		return
 	end
 
-	-- Call persistence layer's save function
 	local api = require("haunt.api")
 	if api.save then
 		api.save()
@@ -64,25 +220,22 @@ local function debounced_save()
 		save_timer = nil
 	end
 
-	-- Create new timer
 	save_timer = vim.loop.new_timer()
 	save_timer:start(
 		SAVE_DEBOUNCE_DELAY,
 		0,
 		vim.schedule_wrap(function()
-			-- Clean up timer
 			if save_timer then
 				save_timer:close()
 				save_timer = nil
 			end
 
-			-- Save bookmarks
 			save_all_bookmarks()
 		end)
 	)
 end
 
--- Setup autocmds for auto-saving bookmarks
+---@private
 function M.setup_autocmds()
 	local augroup = vim.api.nvim_create_augroup("haunt_autosave", { clear = true })
 
@@ -123,126 +276,52 @@ function M.setup_autocmds()
 		end,
 		desc = "Auto-save bookmarks after text changes (handles line updates)",
 	})
-
-	-- Restore bookmark visuals when buffers are opened
-	-- This handles the case where Neovim starts with a dashboard
-	-- and files with bookmarks are opened later
-	vim.api.nvim_create_autocmd("BufReadPost", {
-		group = augroup,
-		pattern = "*",
-		callback = function(args)
-			local api = require("haunt.api")
-			api.restore_buffer_bookmarks(args.buf)
-		end,
-		desc = "Restore bookmark visuals when buffers are opened",
-	})
 end
 
--- Setup user commands
-function M.setup_commands()
-	local api = require("haunt.api")
-
-	-- HauntToggle: Toggle bookmark at current line
-	vim.api.nvim_create_user_command("HauntToggle", function()
-		api.toggle()
-	end, {
-		desc = "Toggle bookmark at current line",
-	})
-
-	-- HauntAnnotate: Add/edit annotation for bookmark at current line
-	vim.api.nvim_create_user_command("HauntAnnotate", function()
-		api.annotate()
-	end, {
-		desc = "Add or edit annotation for bookmark at current line",
-	})
-
-	-- HauntList: Open the picker to list all bookmarks
-	vim.api.nvim_create_user_command("HauntList", function()
-		local picker = require("haunt.picker")
-		picker.show()
-	end, {
-		desc = "List all bookmarks using Snacks.nvim picker",
-	})
-
-	-- HauntClear: Clear bookmark at current line
-	vim.api.nvim_create_user_command("HauntClear", function()
-		api.clear()
-	end, {
-		desc = "Clear all bookmarks in current file",
-	})
-
-	-- HauntClearAll: Clear all bookmarks
-	vim.api.nvim_create_user_command("HauntClearAll", function()
-		api.clear_all()
-	end, {
-		desc = "Clear all bookmarks in the project",
-	})
-
-	-- HauntNext: Jump to next bookmark
-	vim.api.nvim_create_user_command("HauntNext", function()
-		api.next()
-	end, {
-		desc = "Jump to next bookmark in current buffer",
-	})
-
-	-- HauntPrev: Jump to previous bookmark
-	vim.api.nvim_create_user_command("HauntPrev", function()
-		api.prev()
-	end, {
-		desc = "Jump to previous bookmark in current buffer",
-	})
-end
-
---- Setup function for haunt.nvim
---- Initializes the plugin with user configuration
----@param opts? HauntConfig Optional configuration table
+--- Setup function for haunt.nvim.
+---
+--- Initializes the plugin with user configuration. This is optional -
+--- haunt.nvim works with zero configuration using sensible defaults.
+---
+---@param opts? HauntConfig Optional configuration table. See |HauntConfig|.
+---
+---@usage >lua
+---   -- Use defaults (no setup required)
+---   require('haunt.api').annotate()
+---
+---   -- Or customize with setup
+---   require('haunt').setup({
+---     sign = '',
+---     sign_hl = 'DiagnosticInfo',
+---     virt_text_hl = 'Comment',
+---   })
+--- <
 function M.setup(opts)
-	opts = opts or {}
+	config.setup(opts)
 
-	-- Merge user config with defaults
-	config = vim.tbl_deep_extend("force", DEFAULT_CONFIG, opts)
-
-	-- Setup custom data directory if provided
-	if config.data_dir then
-		local persistence = require("haunt.persistence")
-		persistence.set_data_dir(config.data_dir)
+	-- Setup custom data directory if provided (deferred until first use)
+	local user_config = config.get()
+	if user_config.data_dir then
+		-- Store for later use, don't load persistence module yet
+		vim.schedule(function()
+			local persistence = require("haunt.persistence")
+			persistence.set_data_dir(user_config.data_dir)
+		end)
 	end
-
-	-- Setup display layer with sign configuration
-	local display = require("haunt.display")
-	display.setup_signs({
-		sign = config.sign,
-		sign_hl = config.sign_hl,
-		virt_text_hl = config.virt_text_hl,
-	})
-
-	-- Setup display autocmds for sign updates
-	display.setup_autocmds()
-
-	-- Setup autocmds for auto-saving
-	M.setup_autocmds()
-
-	-- Setup user commands
-	M.setup_commands()
-
-	-- Load bookmarks from persistence
-	local api = require("haunt.api")
-	api.load()
 end
 
---- Get the current configuration
----@return table config The current configuration
+--- Get the current configuration.
+---
+---@return HauntConfig config The current configuration
 function M.get_config()
-	if not config then
-		return vim.deepcopy(DEFAULT_CONFIG)
-	end
-	return vim.deepcopy(config)
+	return config.get()
 end
 
---- Check if setup has been called
----@return boolean True if setup was called, false otherwise
+--- Check if setup has been called.
+---
+---@return boolean is_setup True if setup has been called, false otherwise
 function M.is_setup()
-	return config ~= nil
+	return config.is_setup()
 end
 
 return M
