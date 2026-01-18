@@ -14,6 +14,7 @@
 ---@field are_annotations_visible fun(): boolean
 ---@field delete fun(): boolean
 ---@field get_bookmarks fun(): Bookmark[]
+---@field has_bookmarks fun(): boolean
 ---@field load fun(): boolean
 ---@field restore_buffer_bookmarks fun(bufnr: number): boolean
 ---@field save fun(): boolean
@@ -492,6 +493,23 @@ end
 --- <
 function M.get_bookmarks()
 	return vim.deepcopy(bookmarks)
+end
+
+--- Check if any bookmarks exist.
+---
+--- Returns true if there are any bookmarks in memory (after loading from disk).
+--- This is more reliable than checking package.loaded state.
+---
+---@return boolean has_bookmarks True if bookmarks exist, false otherwise
+---
+---@usage >lua
+---   if require('haunt.api').has_bookmarks() then
+---     print("Bookmarks found!")
+---   end
+--- <
+function M.has_bookmarks()
+	ensure_loaded()
+	return #bookmarks > 0
 end
 
 --- Restore visual elements (extmarks, signs, annotations) for a bookmark in a loaded buffer
