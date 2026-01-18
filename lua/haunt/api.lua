@@ -35,6 +35,10 @@ local M = {}
 local bookmarks = {}
 
 ---@private
+---@type table<string, Bookmark[]>
+local bookmarks_by_file = {}
+
+---@private
 ---@type boolean
 local _loaded = false
 
@@ -63,6 +67,69 @@ local function ensure_modules()
 	end
 	---@cast persistence -nil
 	---@cast display -nil
+end
+
+--- Add a bookmark to the file-based index
+--- Maintains sorted order by line number using binary search insertion
+---@param bookmark Bookmark The bookmark to add to the index
+local function add_to_file_index(bookmark)
+	if not bookmarks_by_file[bookmark.file] then
+		bookmarks_by_file[bookmark.file] = {}
+	end
+
+	local file_bookmarks = bookmarks_by_file[bookmark.file]
+
+	-- Binary search to find insertion point
+	local left, right = 1, #file_bookmarks
+	local insert_pos = #file_bookmarks + 1
+
+	while left <= right do
+		local mid = math.floor((left + right) / 2)
+		if file_bookmarks[mid].line < bookmark.line then
+			left = mid + 1
+		else
+			insert_pos = mid
+			right = mid - 1
+		end
+	end
+
+	table.insert(file_bookmarks, insert_pos, bookmark)
+end
+
+--- Remove a bookmark from the file-based index
+---@param bookmark Bookmark The bookmark to remove from the index
+local function remove_from_file_index(bookmark)
+	local file_bookmarks = bookmarks_by_file[bookmark.file]
+	if not file_bookmarks then
+		return
+	end
+
+	for i, bm in ipairs(file_bookmarks) do
+		if bm.id == bookmark.id then
+			table.remove(file_bookmarks, i)
+			-- Clean up empty file entries
+			if #file_bookmarks == 0 then
+				bookmarks_by_file[bookmark.file] = nil
+			end
+			break
+		end
+	end
+end
+
+--- Clear all bookmarks for a specific file from the index
+---@param filepath string The file path to clear from the index
+local function clear_file_from_index(filepath)
+	bookmarks_by_file[filepath] = nil
+end
+
+--- Rebuild the entire file-based index from the bookmarks array
+--- This is called after loading bookmarks from persistence
+local function rebuild_file_index()
+	bookmarks_by_file = {}
+
+	for _, bookmark in ipairs(bookmarks) do
+		add_to_file_index(bookmark)
+	end
 end
 
 --- Ensure bookmarks have been loaded
@@ -214,6 +281,7 @@ local function create_and_persist_bookmark(bufnr, filepath, line, note)
 
 	-- Add to in-memory bookmarks first to keep state consistent
 	table.insert(bookmarks, new_bookmark)
+	add_to_file_index(new_bookmark)
 
 	-- Save to persistence
 	local save_ok = persistence.save_bookmarks(bookmarks)
@@ -221,6 +289,7 @@ local function create_and_persist_bookmark(bufnr, filepath, line, note)
 		-- Rollback: remove from memory and clean up all visual elements
 		-- Remove the bookmark we just added (which is at the end of the table)
 		table.remove(bookmarks, #bookmarks)
+		remove_from_file_index(new_bookmark)
 
 		if new_bookmark.annotation_extmark_id then
 			display.hide_annotation(bufnr, new_bookmark.annotation_extmark_id)
@@ -465,6 +534,7 @@ function M.delete()
 	cleanup_bookmark_visuals(bufnr, existing_bookmark)
 
 	table.remove(bookmarks, index)
+	remove_from_file_index(existing_bookmark)
 
 	-- Save to persistence
 	local save_ok = persistence.save_bookmarks(bookmarks)
@@ -565,6 +635,7 @@ function M.load()
 	local loaded_bookmarks = persistence.load_bookmarks()
 	if loaded_bookmarks then
 		bookmarks = loaded_bookmarks
+		rebuild_file_index()
 	end
 	_loaded = true
 
@@ -772,6 +843,9 @@ function M.clear()
 		table.remove(bookmarks, indices_to_remove[i])
 	end
 
+	-- Clear file from index
+	clear_file_from_index(current_file)
+
 	local save_ok = persistence.save_bookmarks(bookmarks)
 
 	if save_ok then
@@ -839,6 +913,7 @@ function M.clear_all()
 
 	-- clear
 	bookmarks = {}
+	bookmarks_by_file = {}
 
 	-- Save empty bookmark list to persistence
 	local save_ok = persistence.save_bookmarks(bookmarks)
@@ -854,19 +929,8 @@ end
 
 ---@private
 local function get_sorted_bookmarks_for_file(filepath)
-	local file_bookmarks = {}
-	for _, bookmark in ipairs(bookmarks) do
-		if bookmark.file == filepath then
-			table.insert(file_bookmarks, bookmark)
-		end
-	end
-
-	-- Sort by line number asc
-	table.sort(file_bookmarks, function(a, b)
-		return a.line < b.line
-	end)
-
-	return file_bookmarks
+	-- O(1) lookup from file-based index (already sorted)
+	return bookmarks_by_file[filepath] or {}
 end
 
 ---@private
@@ -986,6 +1050,7 @@ function M.delete_by_id(bookmark_id)
 
 	cleanup_bookmark_visuals(bufnr, bookmark)
 	table.remove(bookmarks, bookmark_index)
+	remove_from_file_index(bookmark)
 
 	local save_ok = persistence.save_bookmarks(bookmarks)
 	if not save_ok then
@@ -1002,6 +1067,7 @@ end
 ---@private
 function M._reset_for_testing()
 	bookmarks = {}
+	bookmarks_by_file = {}
 	_loaded = true -- Prevent auto-loading from disk
 	_autosave_setup = false
 	_annotations_visible = true
