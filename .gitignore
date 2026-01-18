@@ -5,6 +5,7 @@
 
 # Test artifacts
 test_results/
+.tests/
 *.log
 
 # OS files
