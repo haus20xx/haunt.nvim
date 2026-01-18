@@ -1,17 +1,58 @@
----@class haunt.Persistence
+---@toc_entry Bookmark Structure
+---@tag haunt-bookmark
+---@tag Bookmark
+---@text
+--- # Bookmark Structure ~
+---
+--- Bookmarks are stored as tables with the following fields:
+
+--- Bookmark data structure.
+---
+--- Represents a single bookmark in haunt.nvim.
+---
+---@class Bookmark
+---@field file string Absolute path to the bookmarked file
+---@field line number 1-based line number of the bookmark
+---@field note string|nil Optional annotation text displayed as virtual text
+---@field id string Unique bookmark identifier (auto-generated)
+---@field extmark_id number|nil Extmark ID for line tracking (internal)
+---@field annotation_extmark_id number|nil Extmark ID for annotation display (internal)
+
+---@private
 local M = {}
 
--- Module-level custom data directory configuration
+---@private
 local custom_data_dir = nil
+
+-- Git info cache with TTL
+local _git_info_cache = nil
+local _cache_time = 0
+local CACHE_TTL = 5000 -- 5 seconds in milliseconds
+
+-- Track if we've already warned about git not being available
+local _git_warning_shown = false
 
 --- Gets the git root directory for the current working directory
 ---@return string|nil git_root The git repository root path, or nil if not in a git repo
 local function get_git_root()
-	local git_dir = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
-	if vim.v.shell_error ~= 0 then
-		return nil
+	local result = vim.fn.systemlist("git rev-parse --show-toplevel")
+	local exit_code = vim.v.shell_error
+
+	if exit_code == 0 then
+		return result[1]
 	end
-	return git_dir
+
+	-- Exit code 128 typically means "not a git repository" - this is expected
+	-- Exit code 127 means "command not found" - git is not installed
+	if exit_code == 127 and not _git_warning_shown then
+		_git_warning_shown = true
+		vim.notify(
+			"haunt.nvim: git command not found. Bookmarks will be stored per working directory instead of per repository/branch.",
+			vim.log.levels.DEBUG
+		)
+	end
+
+	return nil
 end
 
 --- Gets the current git branch name
@@ -19,10 +60,15 @@ end
 local function get_git_branch()
 	-- Use --show-current which returns empty string for detached HEAD and repos with no commits
 	-- This is more appropriate than --abbrev-ref HEAD which returns "HEAD" for detached state
-	local branch = vim.fn.systemlist("git branch --show-current")[1]
-	if vim.v.shell_error ~= 0 then
+	local result = vim.fn.systemlist("git branch --show-current")
+	local exit_code = vim.v.shell_error
+
+	if exit_code ~= 0 then
+		-- Don't warn here since get_git_root() already handles the "git not found" case
 		return nil
 	end
+
+	local branch = result[1]
 	-- Return nil for empty string (detached HEAD or no commits)
 	if branch == "" then
 		return nil
@@ -39,39 +85,49 @@ end
 --- Ensures the haunt data directory exists
 ---@return string data_dir The haunt data directory path
 function M.ensure_data_dir()
-	local data_dir = custom_data_dir or (vim.fn.stdpath("data") .. "/haunt/")
+	local config = require("haunt.config")
+	local data_dir = custom_data_dir or config.DEFAULT_DATA_DIR
 	vim.fn.mkdir(data_dir, "p")
 	return data_dir
 end
 
 --- Get git repository information for the current working directory
+--- Uses caching with 5-second TTL to avoid repeated system calls
 --- @return { root: string|nil, branch: string|nil }
 --- Returns a table with:
 ---   - root: absolute path to git repository root, or nil if not in a git repo
 ---   - branch: name of current branch, or nil if not in a git repo, detached HEAD, or no commits
 function M.get_git_info()
+	local now = vim.loop.hrtime() / 1e6 -- Convert to milliseconds
+
+	-- Check if cache is valid
+	if _git_info_cache and (now - _cache_time) < CACHE_TTL then
+		return _git_info_cache
+	end
+
+	-- Cache miss or expired - fetch fresh data
 	local result = {
 		root = get_git_root(),
 		branch = get_git_branch(),
 	}
+
+	-- Update cache
+	_git_info_cache = result
+	_cache_time = now
+
 	return result
 end
 
 --- Generates a storage path for the current git repository and branch
 --- Uses an 8-character SHA256 hash of "repo_root|branch" for the filename
----@return string|nil path The full path to the storage file, or nil if not in a git repo
+--- Falls back to CWD and "__default__" branch when not in a git repository
+---@return string path The full path to the storage file
 function M.get_storage_path()
-	local repo_root = get_git_root()
-	if not repo_root then
-		vim.notify("haunt.nvim: Not in a git repository", vim.log.levels.WARN)
-		return nil
-	end
+	-- Use git root if available, otherwise fall back to CWD
+	local repo_root = get_git_root() or vim.fn.getcwd()
 
-	local branch = get_git_branch()
-	if not branch then
-		vim.notify("haunt.nvim: Could not determine git branch", vim.log.levels.WARN)
-		return nil
-	end
+	-- Use git branch if available, otherwise fall back to "__default__"
+	local branch = get_git_branch() or "__default__"
 
 	-- Create hash key from repo_root and branch
 	local key = repo_root .. "|" .. branch
@@ -198,6 +254,7 @@ end
 --- @field note string|nil Optional annotation text
 --- @field id string Unique bookmark identifier
 --- @field extmark_id number|nil Extmark ID for line tracking
+--- @field annotation_extmark_id number|nil Extmark ID for annotation virtual text
 
 --- Create a new bookmark
 --- @param file string Absolute path to the file
@@ -245,7 +302,7 @@ function M.is_valid_bookmark(bookmark)
 		return false
 	end
 
-	-- Check required fields
+	-- required fields
 	if type(bookmark.file) ~= "string" or bookmark.file == "" then
 		return false
 	end
@@ -258,7 +315,7 @@ function M.is_valid_bookmark(bookmark)
 		return false
 	end
 
-	-- Check optional fields (if present, must be correct type)
+	-- optional fields (nil | right type)
 	if bookmark.note ~= nil and type(bookmark.note) ~= "string" then
 		return false
 	end
