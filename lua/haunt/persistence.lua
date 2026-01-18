@@ -148,8 +148,8 @@ function M.get_storage_path()
 	-- Create hash key from repo_root and branch
 	local key = repo_root .. "|" .. branch
 
-	-- Generate 8-character hash using SHA256
-	local hash = vim.fn.sha256(key):sub(1, 8)
+	-- Generate 12-character hash using SHA256 (reduces collision risk)
+	local hash = vim.fn.sha256(key):sub(1, 12)
 
 	-- Ensure data directory exists
 	local data_dir = M.ensure_data_dir()
