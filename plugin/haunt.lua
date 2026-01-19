@@ -50,15 +50,12 @@ vim.api.nvim_create_user_command('HauntList', function()
   require('haunt.picker').show()
 end, { desc = 'List all bookmarks' })
 
--- Deferred restoration setup (only if bookmarks exist)
+-- Deferred restoration setup
 vim.api.nvim_create_autocmd('UIEnter', {
   once = true,
   callback = function()
     vim.schedule(function()
-      local haunt = require('haunt')
-      if haunt._has_potential_bookmarks() then
-        haunt._setup_restoration_autocmd()
-      end
+      require('haunt')._setup_restoration_autocmd()
     end)
   end,
 })

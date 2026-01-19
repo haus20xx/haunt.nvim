@@ -151,17 +151,6 @@ local config = require("haunt.config")
 ---@type boolean
 local _initialized = false
 
----@private
-function M._has_potential_bookmarks()
-	local data_dir = config.DEFAULT_DATA_DIR
-	if vim.fn.isdirectory(data_dir) == 0 then
-		return false
-	end
-	local files = vim.fn.glob(data_dir .. "*.json", false, true)
-	return #files > 0
-end
-
----@private
 function M._ensure_initialized()
 	if _initialized then
 		return
