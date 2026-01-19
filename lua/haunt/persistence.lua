@@ -263,7 +263,17 @@ function M.load_bookmarks(filepath)
 	return data.bookmarks
 end
 
---- Create a new bookmark
+--- Generate a unique bookmark ID
+--- @param file string Absolute path to the file
+--- @param line number 1-based line number
+--- @return string id A 16-character unique identifier
+local function generate_bookmark_id(file, line)
+	local timestamp = tostring(vim.uv.hrtime())
+	local id_key = file .. tostring(line) .. timestamp
+	return vim.fn.sha256(id_key):sub(1, 16)
+end
+
+--- Create a new bookmark. Does NOT save it!
 --- @param file string Absolute path to the file
 --- @param line number 1-based line number
 --- @param note? string Optional annotation text
@@ -286,16 +296,11 @@ function M.create_bookmark(file, line, note)
 		return nil, "note must be nil or a string"
 	end
 
-	-- Generate unique ID using SHA256 hash of file + line + timestamp
-	local timestamp = tostring(vim.uv.hrtime())
-	local id_key = file .. tostring(line) .. timestamp
-	local id = vim.fn.sha256(id_key):sub(1, 16) -- 16 chars for uniqueness
-
 	return {
 		file = file,
 		line = line,
 		note = note,
-		id = id,
+		id = generate_bookmark_id(file, line),
 		extmark_id = nil, -- Will be set by display layer
 	}
 end
