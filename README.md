@@ -26,8 +26,6 @@ TODO: add a little photo of a ghost and a programmer
 ## Installation
 
 ``` lua
-local haunt = require("haunt.api")
-local haunt_picker = require("haunt.picker")
 return {
   "TheNoeTrevino/haunt.nvim",
   opts = {
@@ -43,46 +41,46 @@ return {
     },
   },
   init = function()
+    local haunt = require("haunt.api")
+    local haunt_picker = require("haunt.picker")
     local map = vim.keymap.set
-    map("n", "mt", function()
+    local prefix = "<leader>h"
+
+    -- annotations
+    map("n", prefix .. "a", function()
+      haunt.annotate()
+    end, { desc = "Annotate" })
+
+    map("n", prefix .. "t", function()
       haunt.toggle_annotation()
     end, { desc = "Toggle annotation" })
 
-    map("n", "mT", function()
+    map("n", prefix .. "T", function()
       haunt.toggle_all_lines()
     end, { desc = "Toggle all annotations" })
 
-    map("n", "md", function()
+    map("n", prefix .. "d", function()
       haunt.delete()
     end, { desc = "Delete bookmark" })
 
-    map("n", "mn", function()
-      haunt.next()
-    end, { desc = "Next bookmark" })
-
-    map("n", "ma", function()
-      haunt.annotate()
-    end, { desc = "Next bookmark" })
-
-    map("n", "ml", function()
-      haunt_picker.show()
-    end, { desc = "Next bookmark" })
+    map("n", prefix .. "C", function()
+      haunt.clear_all()
+    end, { desc = "Delete all bookmarks" })
 
     -- move
-    map("n", "mp", function()
+    map("n", prefix .. "p", function()
       haunt.prev()
     end, { desc = "Previous bookmark" })
 
-    map("n", "ma", function()
-      haunt.annotate()
-    end, { desc = "Annotate bookmark" })
+    map("n", prefix .. "n", function()
+      haunt.next()
+    end, { desc = "Next bookmark" })
 
-    -- clear
-    map("n", "mC", function()
-      haunt.clear_all()
-    end, { desc = "Clear all bookmarks" })
+    -- picker
+    map("n", prefix .. "l", function()
+      haunt_picker.show()
+    end, { desc = "Show Picker" })
   end,
-,
 }
 ```
 
