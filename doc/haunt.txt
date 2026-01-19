@@ -41,7 +41,7 @@ Basic usage: >lua
   require('haunt.api').prev()
 
   -- Toggle annotation visibility
-  require('haunt.api').toggle()
+  require('haunt.api').toggle_annotation()
 
   -- Delete bookmark at current line
   require('haunt.api').delete()
@@ -65,7 +65,7 @@ Or use the provided commands: >vim
                                                             *haunt-keymaps*
 >lua
   -- Toggle bookmark annotation visibility
-  vim.keymap.set('n', 'mm', function() require('haunt.api').toggle() end,
+  vim.keymap.set('n', 'mm', function() require('haunt.api').toggle_annotation() end,
     { desc = "Toggle bookmark annotation" })
 
   -- Navigate bookmarks
@@ -133,6 +133,30 @@ The picker requires Snacks.nvim (https://github.com/folke/snacks.nvim).
 Install it via your plugin manager.
 
 ------------------------------------------------------------------------------
+Class ~
+{HauntModule}
+Fields ~
+{_has_potential_bookmarks} `(fun(): boolean)`
+{_ensure_initialized} `(fun())`
+{_setup_restoration_autocmd} `(fun())`
+{setup_autocmds} `(fun())`
+{setup} `(fun(opts?: HauntConfig))`
+{get_config} `(fun(): HauntConfig)`
+{is_setup} `(fun(): boolean)`
+
+------------------------------------------------------------------------------
+                                                                  *_initialized*
+                                 `_initialized`
+Type ~
+`(boolean)`
+
+------------------------------------------------------------------------------
+                                                                    *save_timer*
+                                  `save_timer`
+Type ~
+`(uv_timer_t)`
+
+------------------------------------------------------------------------------
                                                                      *M.setup()*
                                `M.setup`({opts})
 Setup function for haunt.nvim.
@@ -189,15 +213,6 @@ All fields are optional. Default values are shown below.
 
 Class ~
 {HauntConfig}
-Fields ~
-{sign} `(optional)` `(string)` Icon displayed in the sign column for bookmarks. Default: '󱙝'
-{sign_hl} `(optional)` `(string)` Highlight group for the sign. Default: 'DiagnosticInfo'
-{virt_text_hl} `(optional)` `(string)` Highlight group for annotation virtual text. Default: 'HauntAnnotation'
-{annotation_prefix} `(optional)` `(string)` Text displayed before the annotation. Default: ' 󰆉 '
-{line_hl} `(optional)` `(string|nil)` Highlight group for the entire bookmarked line. Default: nil
-{virt_text_pos} `(optional)` `(string)` Position of virtual text. One of: "eol", "eol_right_align", "overlay", "right_align", "inline". Default: "eol"
-{data_dir} `(optional)` `(string|nil)` Custom data directory path for bookmark storage. Default: vim.fn.stdpath("data") .. "/haunt/"
-{picker_keys} `(optional)` `(table)` Keybindings for picker actions. See below for structure.
 
 
 Default configuration: ~
@@ -217,6 +232,7 @@ Default configuration: ~
   	},
   }
 <
+Fields ~
 {sign} `(optional)` `(string)` The icon to display for bookmarks (default: '󱙝')
 {sign_hl} `(optional)` `(string)` The highlight group for the sign text (default: 'DiagnosticInfo')
 {virt_text_hl} `(optional)` `(string)` The highlight group for virtual text annotations (default: 'HauntAnnotation')
@@ -225,6 +241,12 @@ Default configuration: ~
 {virt_text_pos} `(optional)` `(string)` Position of virtual text: "eol" (default), "eol_right_align", "overlay", "right_align", "inline"
 {data_dir} `(optional)` `(string|nil)` Custom data directory path (default: vim.fn.stdpath("data") .. "/haunt/")
 {picker_keys} `(optional)` `(table<string, table>)` Keybindings for picker actions (default: {delete = {key = 'd', mode = {'n'}}, edit_annotation = {key = 'a', mode = {'n'}}})
+
+------------------------------------------------------------------------------
+                                                                   *user_config*
+                                 `user_config`
+Type ~
+`(HauntConfig|nil)`
 
 
 ==============================================================================
@@ -237,6 +259,56 @@ All API functions are available through `require('haunt.api')`.
 
 These functions provide the core functionality for managing bookmarks:
 creating, navigating, annotating, and deleting bookmarks.
+
+------------------------------------------------------------------------------
+Class ~
+{ApiModule}
+Fields ~
+{toggle_annotation} `(fun(): boolean)`
+{toggle_all_lines} `(fun(): boolean)`
+{are_annotations_visible} `(fun(): boolean)`
+{delete} `(fun(): boolean)`
+{get_bookmarks} `(fun(): Bookmark[])`
+{has_bookmarks} `(fun(): boolean)`
+{load} `(fun(): boolean)`
+{restore_buffer_bookmarks} `(fun(bufnr: number): boolean)`
+{save} `(fun(): boolean)`
+{annotate} `(fun(text?: string): boolean)`
+{clear} `(fun(): boolean)`
+{clear_all} `(fun(): boolean)`
+{next} `(fun(): boolean)`
+{prev} `(fun(): boolean)`
+{delete_by_id} `(fun(bookmark_id: string): boolean)`
+{cleanup_buffer_tracking} `(fun(bufnr: number))`
+{_reset_for_testing} `(fun())`
+
+------------------------------------------------------------------------------
+                                                           *add_to_file_index()*
+                        `add_to_file_index`({bookmark})
+Add a bookmark to the file-based index
+Maintains sorted order by line number using binary search insertion
+Parameters ~
+{bookmark} `(Bookmark)` The bookmark to add to the index
+
+------------------------------------------------------------------------------
+                                                      *remove_from_file_index()*
+                      `remove_from_file_index`({bookmark})
+Remove a bookmark from the file-based index
+Parameters ~
+{bookmark} `(Bookmark)` The bookmark to remove from the index
+
+------------------------------------------------------------------------------
+                                                       *clear_file_from_index()*
+                      `clear_file_from_index`({filepath})
+Clear all bookmarks for a specific file from the index
+Parameters ~
+{filepath} `(string)` The file path to clear from the index
+
+------------------------------------------------------------------------------
+                                                          *rebuild_file_index()*
+                             `rebuild_file_index`()
+Rebuild the entire file-based index from the bookmarks array
+This is called after loading bookmarks from persistence
 
 ------------------------------------------------------------------------------
                                                                *ensure_loaded()*
@@ -302,7 +374,7 @@ Return ~
                                                  *create_and_persist_bookmark()*
        `create_and_persist_bookmark`({bufnr}, {filepath}, {line}, {note})
 Create a bookmark with visual elements and persist it
-This is a helper function to avoid code duplication between toggle() and annotate()
+This is a helper function to avoid code duplication between toggle_annotation() and annotate()
 Parameters ~
 {bufnr} `(number)` Buffer number
 {filepath} `(string)` Normalized absolute file path
@@ -336,8 +408,8 @@ Return ~
 `(number|nil)` index The index of the bookmark in the bookmarks table
 
 ------------------------------------------------------------------------------
-                                                                    *M.toggle()*
-                                  `M.toggle`()
+                                                         *M.toggle_annotation()*
+                            `M.toggle_annotation`()
 Toggle annotation visibility at the current cursor position.
 
 If a bookmark exists at the current line and has an annotation,
@@ -349,7 +421,7 @@ Return ~
 
 Usage ~
 >lua
-  require('haunt.api').toggle()
+  require('haunt.api').toggle_annotation()
 <
 ------------------------------------------------------------------------------
                                                           *M.toggle_all_lines()*
@@ -407,6 +479,23 @@ Usage ~
   for _, bookmark in ipairs(bookmarks) do
     print(string.format("%s:%d - %s",
       bookmark.file, bookmark.line, bookmark.note or ""))
+  end
+<
+------------------------------------------------------------------------------
+                                                             *M.has_bookmarks()*
+                              `M.has_bookmarks`()
+Check if any bookmarks exist.
+
+Returns true if there are any bookmarks in memory (after loading from disk).
+This is more reliable than checking package.loaded state.
+
+Return ~
+`(boolean)` has_bookmarks True if bookmarks exist, false otherwise
+
+Usage ~
+>lua
+  if require('haunt.api').has_bookmarks() then
+    print("Bookmarks found!")
   end
 <
 ------------------------------------------------------------------------------
@@ -553,6 +642,14 @@ Usage ~
     require('haunt.api').delete_by_id(bookmarks[1].id)
   end
 <
+------------------------------------------------------------------------------
+                                                   *M.cleanup_buffer_tracking()*
+                      `M.cleanup_buffer_tracking`({bufnr})
+Clean up restoration tracking for a deleted buffer
+This prevents memory leaks in the restored_buffers table
+Parameters ~
+{bufnr} `(number)` Buffer number that was deleted
+
 
 ==============================================================================
 ------------------------------------------------------------------------------
@@ -577,6 +674,43 @@ Fields ~
 {id} `(string)` Unique bookmark identifier (auto-generated)
 {extmark_id} `(number|nil)` Extmark ID for line tracking (internal)
 {annotation_extmark_id} `(number|nil)` Extmark ID for annotation display (internal)
+
+------------------------------------------------------------------------------
+Class ~
+{PersistenceModule}
+Fields ~
+{set_data_dir} `(fun(dir: string))`
+{ensure_data_dir} `(fun(): string|nil,)` string|nil
+{get_git_info} `(fun(): {root: string|nil, branch: string|nil})`
+{get_storage_path} `(fun(): string|nil,)` string|nil
+{save_bookmarks} `(fun(bookmarks: Bookmark[], filepath?: string): boolean)`
+{load_bookmarks} `(fun(filepath?: string): Bookmark[]|nil)`
+{create_bookmark} `(fun(file: string, line: number, note?: string): Bookmark|nil,)` string|nil
+{is_valid_bookmark} `(fun(bookmark: table): boolean)`
+
+------------------------------------------------------------------------------
+                                                               *_git_info_cache*
+                               `_git_info_cache`
+Type ~
+`({root: string|nil, branch: string|nil}|nil)`
+
+------------------------------------------------------------------------------
+                                                                   *_cache_time*
+                                 `_cache_time`
+Type ~
+`(number)`
+
+------------------------------------------------------------------------------
+                                                                     *CACHE_TTL*
+                                  `CACHE_TTL`
+Type ~
+`(number)`
+
+------------------------------------------------------------------------------
+                                                            *_git_warning_shown*
+                              `_git_warning_shown`
+Type ~
+`(boolean)`
 
 ------------------------------------------------------------------------------
                                                                 *get_git_root()*
@@ -645,19 +779,17 @@ Return ~
 `(table)` bookmarks Array of bookmarks, or empty table if file doesn't exist or on error
 
 ------------------------------------------------------------------------------
-Bookmark structure
-@class Bookmark
-@field file string Absolute path to file
-@field line number 1-based line number
-@field note string|nil Optional annotation text
-@field id string Unique bookmark identifier
-@field extmark_id number|nil Extmark ID for line tracking
-@field annotation_extmark_id number|nil Extmark ID for annotation virtual text
+                                                        *generate_bookmark_id()*
+                     `generate_bookmark_id`({file}, {line})
+Generate a unique bookmark ID
+@param file string Absolute path to the file
+@param line number 1-based line number
+@return string id A 16-character unique identifier
 
 ------------------------------------------------------------------------------
                                                            *M.create_bookmark()*
                   `M.create_bookmark`({file}, {line}, {note})
-Create a new bookmark
+Create a new bookmark. Does NOT save it!
 @param file string Absolute path to the file
 @param line number 1-based line number
 @param note? string Optional annotation text

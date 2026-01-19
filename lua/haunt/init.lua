@@ -141,6 +141,7 @@
 ---@field get_config fun(): HauntConfig
 ---@field is_setup fun(): boolean
 
+---@private
 ---@type HauntModule
 ---@diagnostic disable-next-line: missing-fields
 local M = {}

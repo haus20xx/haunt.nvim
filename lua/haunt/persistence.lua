@@ -28,6 +28,7 @@
 ---@field create_bookmark fun(file: string, line: number, note?: string): Bookmark|nil, string|nil
 ---@field is_valid_bookmark fun(bookmark: table): boolean
 
+---@private
 ---@type PersistenceModule
 ---@diagnostic disable-next-line: missing-fields
 local M = {}

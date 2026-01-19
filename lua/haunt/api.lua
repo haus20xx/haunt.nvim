@@ -27,6 +27,7 @@
 ---@field cleanup_buffer_tracking fun(bufnr: number)
 ---@field _reset_for_testing fun()
 
+---@private
 ---@type ApiModule
 ---@diagnostic disable-next-line: missing-fields
 local M = {}
