@@ -10,7 +10,6 @@
 
 ---@class ApiModule
 ---@field toggle_annotation fun(): boolean
----@field toggle fun(): boolean @deprecated Use toggle_annotation instead
 ---@field toggle_all_lines fun(): boolean
 ---@field are_annotations_visible fun(): boolean
 ---@field delete fun(): boolean
@@ -427,16 +426,6 @@ function M.toggle_annotation()
 	end
 
 	return true
-end
-
---- @deprecated Use toggle_annotation() instead
---- Deprecated alias for toggle_annotation() - maintained for backward compatibility
-function M.toggle()
-	vim.notify_once(
-		"haunt.nvim: toggle() is deprecated, use toggle_annotation() instead",
-		vim.log.levels.WARN
-	)
-	return M.toggle_annotation()
 end
 
 --- Toggle visibility of ALL annotations across ALL bookmarks.
