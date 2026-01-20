@@ -3,6 +3,7 @@
 ---@field has_bookmarks fun(): boolean
 ---@field load fun(): boolean
 ---@field save fun(): boolean
+---@field get_quickfix_items fun(opts?: QuickfixOpts): QuickfixItem[]
 ---@field find_by_id fun(bookmark_id: string): Bookmark|nil, number|nil
 ---@field get_bookmark_at_line fun(filepath: string, line: number): Bookmark|nil, number|nil
 ---@field get_sorted_bookmarks_for_file fun(filepath: string): Bookmark[]
@@ -17,6 +18,16 @@
 ---@type StoreModule
 ---@diagnostic disable-next-line: missing-fields
 local M = {}
+
+---@class QuickfixOpts
+---@field current_buffer? boolean If true, only include bookmarks from the current buffer
+---@field append_annotations? boolean If true, include annotations in quickfix text
+
+---@class QuickfixItem
+---@field filename string
+---@field lnum integer
+---@field col integer
+---@field text string
 
 local utils = require("haunt.utils")
 
@@ -169,6 +180,72 @@ end
 function M.get_bookmarks()
 	ensure_loaded()
 	return vim.deepcopy(bookmarks)
+end
+
+--- Get bookmark locations as quickfix items.
+---
+---@param opts? QuickfixOpts Options for filtering and formatting
+---@return QuickfixItem[] items Quickfix items
+function M.get_quickfix_items(opts)
+	ensure_loaded()
+
+	opts = opts or {}
+
+	local append_annotations = opts.append_annotations
+	if append_annotations == nil then
+		append_annotations = true
+	end
+
+	local current_buffer = opts.current_buffer or false
+
+	-- Work on a copy to avoid mutating store order
+	local active_bookmarks = {}
+	for _, bookmark in ipairs(bookmarks) do
+		table.insert(active_bookmarks, bookmark)
+	end
+
+	if current_buffer then
+		local current_file = utils.normalize_filepath(vim.api.nvim_buf_get_name(0))
+		if current_file == "" then
+			return {}
+		end
+
+		local filtered = {}
+		for _, bookmark in ipairs(active_bookmarks) do
+			if bookmark.file == current_file then
+				table.insert(filtered, bookmark)
+			end
+		end
+		active_bookmarks = filtered
+	end
+
+	if #active_bookmarks == 0 then
+		return {}
+	end
+
+	table.sort(active_bookmarks, function(a, b)
+		if a.file == b.file then
+			return a.line < b.line
+		end
+		return a.file < b.file
+	end)
+
+	local items = {}
+	for _, bookmark in ipairs(active_bookmarks) do
+		local text = "Haunt bookmark"
+		if append_annotations and bookmark.note and bookmark.note ~= "" then
+			text = bookmark.note
+		end
+
+		table.insert(items, {
+			filename = bookmark.file, -- absolute path works best for quickfix
+			lnum = bookmark.line,
+			col = 1,
+			text = text,
+		})
+	end
+
+	return items
 end
 
 --- Get raw reference to bookmarks array (for internal use only)
