@@ -253,6 +253,17 @@ function M.create_mock_persistence()
 	return mock
 end
 
+--- Check if clipboard is available (for skipping clipboard tests in CI)
+---@return boolean available Whether clipboard provider is available
+function M.has_clipboard()
+	local ok = pcall(vim.fn.setreg, "+", "clipboard_test")
+	if not ok then
+		return false
+	end
+	local result = vim.fn.getreg("+")
+	return result == "clipboard_test"
+end
+
 --- Count extmarks with virtual text in a buffer (for testing annotation duplicates)
 ---@param bufnr number Buffer number
 ---@param namespace number Namespace ID

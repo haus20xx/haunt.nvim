@@ -268,6 +268,11 @@ describe("haunt.sidekick", function()
 
 	describe("yank_locations", function()
 		it("yanks bookmark locations to unnamedplus register", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			local mock_bookmarks = {
 				{
 					file = cwd .. "/test.lua",
@@ -314,6 +319,11 @@ describe("haunt.sidekick", function()
 		end)
 
 		it("respects current_buffer option when yanking", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			local current_file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p")
 
 			local mock_bookmarks = {
@@ -347,6 +357,11 @@ describe("haunt.sidekick", function()
 		end)
 
 		it("respects append_annotations option when yanking", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			local mock_bookmarks = {
 				{
 					file = cwd .. "/test.lua",
@@ -376,6 +391,11 @@ describe("haunt.sidekick", function()
 		end)
 
 		it("counts yanked bookmarks correctly", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			local mock_bookmarks = {
 				{
 					file = cwd .. "/test.lua",
@@ -412,6 +432,11 @@ describe("haunt.sidekick", function()
 		end)
 
 		it("handles single bookmark correctly", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			local mock_bookmarks = {
 				{
 					file = cwd .. "/test.lua",
@@ -438,6 +463,11 @@ describe("haunt.sidekick", function()
 		end)
 
 		it("works as a fallback when sidekick is not installed", function()
+			if not helpers.has_clipboard() then
+				pending("No clipboard provider available")
+				return
+			end
+
 			-- The function should work independently of sidekick installation
 			-- This test verifies the function works without requiring sidekick
 			local mock_bookmarks = {
