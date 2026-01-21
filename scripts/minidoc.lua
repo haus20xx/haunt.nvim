@@ -1,6 +1,7 @@
 -- run with: :lua MiniDoc.generate() or :luafile scripts/minidoc.lua
 
 local MiniDoc = require("mini.doc")
+_G.MiniDoc = MiniDoc
 
 -- define order for the docs
 local files = {

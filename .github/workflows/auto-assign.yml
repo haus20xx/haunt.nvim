@@ -19,6 +19,12 @@ jobs:
             const owner = context.repo.owner
             const repo = context.repo.repo
             const number = context.issue.number
+            const opener = context.payload.sender.login
+
+            if (opener === 'TheNoeTrevino') {
+              console.log('Skipping auto-assign: opened by TheNoeTrevino')
+              return
+            }
 
             await github.rest.issues.addAssignees({
               owner,

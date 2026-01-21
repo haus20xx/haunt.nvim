@@ -689,8 +689,22 @@ end
 --- <
 function M.yank_locations(opts)
 	ensure_modules()
+	opts = opts or {}
+
 	---@cast sidekick -nil
-	return sidekick.yank_locations(opts)
+	local locations = sidekick.get_locations(opts)
+
+	if locations == "" then
+		vim.notify("No bookmarks to yank", vim.log.levels.WARN)
+		return false
+	end
+
+	vim.fn.setreg("+", locations)
+
+	local count = select(2, locations:gsub("\n", "\n")) + 1
+	vim.notify(string.format("Yanked %d bookmark location(s) to clipboard", count), vim.log.levels.INFO)
+
+	return true
 end
 
 --- Get all bookmarks as a deep copy.

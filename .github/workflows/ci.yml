@@ -25,8 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: folke/github/neovim@main
+      - name: Install mini.nvim
+        run: |
+          mkdir -p ~/.local/share/nvim/site/pack/deps/start
+          git clone --depth 1 https://github.com/echasnovski/mini.nvim ~/.local/share/nvim/site/pack/deps/start/mini.nvim
       - name: Generate docs with mini.doc
-        run: nvim --headless -c "luafile scripts/minidoc.lua" -c "qa"
+        run: nvim --headless -c "luafile scripts/minidoc.lua" -c "qa!"
       - uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore(build): auto-generated vimdocs"
