@@ -196,4 +196,28 @@ describe("haunt.utils", function()
 			assert.is_true(vim.api.nvim_buf_is_loaded(result_bufnr))
 		end)
 	end)
+
+	describe("toggle_quickfix", function()
+		after_each(function()
+			vim.cmd("cclose")
+		end)
+
+		it("opens quickfix when closed", function()
+			vim.cmd("cclose")
+			assert.is_false(helpers.is_quickfix_open())
+
+			utils.toggle_quickfix()
+
+			assert.is_true(helpers.is_quickfix_open())
+		end)
+
+		it("closes quickfix when open", function()
+			vim.cmd("copen")
+			assert.is_true(helpers.is_quickfix_open())
+
+			utils.toggle_quickfix()
+
+			assert.is_false(helpers.is_quickfix_open())
+		end)
+	end)
 end)

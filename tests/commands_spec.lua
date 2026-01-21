@@ -24,6 +24,8 @@ describe("haunt user commands", function()
 			"HauntClearAll",
 			"HauntNext",
 			"HauntPrev",
+			"HauntQf",
+			"HauntQfAll",
 		}
 
 		for _, cmd in ipairs(expected_commands) do
@@ -239,6 +241,95 @@ describe("haunt user commands", function()
 			local ok = pcall(picker.show)
 			-- Should not throw, even if Snacks is not available (it notifies instead)
 			assert.is_true(ok)
+		end)
+	end)
+
+	describe("HauntQf", function()
+		local bufnr1, test_file1, bufnr2, test_file2
+		local original_input
+
+		before_each(function()
+			original_input = vim.fn.input
+			vim.fn.input = function()
+				return "Test annotation"
+			end
+
+			bufnr1, test_file1 = helpers.create_test_buffer({ "File1 Line 1", "File1 Line 2" })
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			vim.cmd("HauntAnnotate")
+
+			bufnr2, test_file2 = helpers.create_test_buffer({ "File2 Line 1" })
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			vim.cmd("HauntAnnotate")
+		end)
+
+		after_each(function()
+			vim.fn.input = original_input
+			vim.cmd("cclose")
+			helpers.cleanup_buffer(bufnr1, test_file1)
+			helpers.cleanup_buffer(bufnr2, test_file2)
+		end)
+
+		it("populates quickfix with current buffer bookmarks only", function()
+			vim.api.nvim_set_current_buf(bufnr2)
+
+			vim.cmd("HauntQf")
+
+			local qf_list = vim.fn.getqflist()
+			assert.are.equal(1, #qf_list)
+			assert.are.equal(bufnr2, qf_list[1].bufnr)
+		end)
+
+		it("toggles quickfix window open", function()
+			vim.cmd("cclose")
+			assert.is_false(helpers.is_quickfix_open())
+
+			vim.cmd("HauntQf")
+
+			assert.is_true(helpers.is_quickfix_open())
+		end)
+	end)
+
+	describe("HauntQfAll", function()
+		local bufnr1, test_file1, bufnr2, test_file2
+		local original_input
+
+		before_each(function()
+			original_input = vim.fn.input
+			vim.fn.input = function()
+				return "Test annotation"
+			end
+
+			bufnr1, test_file1 = helpers.create_test_buffer({ "File1 Line 1", "File1 Line 2" })
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			vim.cmd("HauntAnnotate")
+
+			bufnr2, test_file2 = helpers.create_test_buffer({ "File2 Line 1" })
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			vim.cmd("HauntAnnotate")
+		end)
+
+		after_each(function()
+			vim.fn.input = original_input
+			vim.cmd("cclose")
+			helpers.cleanup_buffer(bufnr1, test_file1)
+			helpers.cleanup_buffer(bufnr2, test_file2)
+		end)
+
+		it("populates quickfix with all bookmarks", function()
+			vim.cmd("HauntQfAll")
+
+			local qf_list = vim.fn.getqflist()
+			assert.are.equal(2, #qf_list)
+		end)
+
+		it("toggles quickfix window open", function()
+			vim.cmd("cclose")
+			assert.is_false(helpers.is_quickfix_open())
+
+			vim.cmd("HauntQfAll")
+
+			assert.is_true(helpers.is_quickfix_open())
 		end)
 	end)
 end)

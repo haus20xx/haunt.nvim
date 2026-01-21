@@ -24,7 +24,13 @@ if vim.g.loaded_haunt == 1 then
 end
 vim.g.loaded_haunt = 1
 
--- Create lightweight command wrappers that lazy-load on use
+---@class HauntCommandInfo
+---@field fn string
+---@field desc string
+---@field has_args? boolean
+---@field args? table
+
+---@type table<string, HauntCommandInfo>
 local commands = {
 	HauntToggle = { fn = "toggle_annotation", desc = "Toggle bookmark annotation visibility" },
 	HauntAnnotate = { fn = "annotate", desc = "Add/edit annotation", has_args = true },
@@ -33,12 +39,16 @@ local commands = {
 	HauntNext = { fn = "next", desc = "Jump to next bookmark" },
 	HauntPrev = { fn = "prev", desc = "Jump to previous bookmark" },
 	HauntDelete = { fn = "delete", desc = "Delete bookmark at current line" },
+	HauntQf = { fn = "to_quickfix", desc = "Send Buffer Annotations to Quickfix List", args = { current_buffer = true } },
+	HauntQfAll = { fn = "to_quickfix", desc = "Send All Annotations to Quickfix List" },
 }
 
 for name, info in pairs(commands) do
 	vim.api.nvim_create_user_command(name, function(opts)
 		if info.has_args and opts.args ~= "" then
 			require("haunt.api")[info.fn](opts.args)
+		elseif info.args then
+			require("haunt.api")[info.fn](info.args)
 		else
 			require("haunt.api")[info.fn]()
 		end

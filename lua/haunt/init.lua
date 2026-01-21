@@ -59,6 +59,8 @@
 ---   :HauntList
 ---   :HauntClear
 ---   :HauntClearAll
+---   :HauntQf
+---   :HauntQfAll
 --- <
 ---
 --- # Recommended Keymaps ~

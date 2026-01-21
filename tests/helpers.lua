@@ -280,4 +280,13 @@ function M.count_annotation_extmarks(bufnr, namespace)
 	return count
 end
 
+function M.is_quickfix_open()
+	for _, w in ipairs(vim.fn.getwininfo()) do
+		if w.quickfix == 1 then
+			return true
+		end
+	end
+	return false
+end
+
 return M
