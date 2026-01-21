@@ -90,8 +90,15 @@ return {
     map("n", prefix .. "l", function()
       haunt_picker.show()
     end, { desc = "Show Picker" })
-  end,
-}
+
+    -- quickfix 
+    map("n", prefix .. "q", function()
+       haunt.to_quickfix()
+    end, { desc = "Show Picker" })
+
+    map("n", prefix .. "Q", function()
+      haunt.to_quickfix({ current_buffer = true })
+    end, { desc = "Show Picker" })
 ```
 
 ## Usage
@@ -154,6 +161,8 @@ Or you can use the user commands:
 `HauntList`
 `HauntNext`
 `HauntPrev`
+`HauntQf`
+`HauntQfAll`
 
 It should be pretty obvious what these do.
 
@@ -219,16 +228,6 @@ return {
 }
 ```
 
-### Quickfix list
-
-Populate Neovim's quickfix list with your bookmarks:
-
-```lua
-local haunt = require("haunt.api")
-haunt.to_quickfix() -- all bookmarks
-haunt.to_quickfix({ current_buffer = true }) -- current buffer only
-```
-
 ### Git
 Keep your annotations scoped to your branches.
 
@@ -270,6 +269,5 @@ I hope this helps others with the same issues.
 this can take in a boolean, or a logging level. then, in the program, we can use
 a custom logger that uses vim.notify. we are gonna wanna use closure to store the log level and avoid recomputes
 - [ ] Integration for Telescope and fzf-lua?
-- [x] Quickfix list integration? I feel like picker is more than enough though. If you see this and want it, open a ticket.
 
 </details>
