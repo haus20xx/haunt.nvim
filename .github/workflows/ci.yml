@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -11,26 +11,8 @@ permissions:
 
 jobs:
   ci:
-    if: github.event.pull_request.user.login != 'TheNoeTrevino' || github.event_name != 'pull_request'
-    uses: folke/github/.github/workflows/ci.yml@main
+    uses: thenoetrevino/github/.github/workflows/nvim-plugins-ci.yml@main
     secrets: inherit
     with:
       plugin: haunt.nvim
       repo: thenoetrevino/haunt.nvim
-      docs: false
-
-  docs:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v5
-      - uses: folke/github/neovim@main
-      - name: Install mini.nvim
-        run: |
-          mkdir -p ~/.local/share/nvim/site/pack/deps/start
-          git clone --depth 1 https://github.com/echasnovski/mini.nvim ~/.local/share/nvim/site/pack/deps/start/mini.nvim
-      - name: Generate docs with mini.doc
-        run: nvim --headless -c "luafile scripts/minidoc.lua" -c "qa!"
-      - uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: "chore(build): auto-generated vimdocs"
