@@ -171,7 +171,8 @@ haunt_sk.get_locations({current_buffer = true})
 --- Saves current bookmarks to the old data_dir, clears all visual elements,
 --- then loads bookmarks from the new location and restores visuals.
 --- This is useful for autocommands that need to switch bookmark contexts.
-haunt.change_data_dir()
+haunt.change_data_dir("~/projects/myproject/.bookmarks/")
+haunt.change_data_dir(nil) -- reset to default
 ```
 
 Or you can use the user commands: 
@@ -184,6 +185,7 @@ Or you can use the user commands:
 `HauntPrev`
 `HauntQf`
 `HauntQfAll`
+`HauntChangeDataDir [path]`
 
 It should be pretty obvious what these do.
 
@@ -253,6 +255,18 @@ return {
 Keep your annotations scoped to your branches.
 
 https://github.com/user-attachments/assets/1d2b996c-b0be-459c-9ff0-63e7a1ebb936
+
+### Project-Specific Bookmarks
+Use `change_data_dir` to scope bookmarks per project/directory:
+
+``` lua
+vim.api.nvim_create_autocmd("DirChanged", {
+  callback = function()
+    local project_bookmarks = vim.fn.getcwd() .. "/.bookmarks/"
+    require("haunt.api").change_data_dir(project_bookmarks)
+  end,
+})
+```
 
 ## Why?
 
