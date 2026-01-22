@@ -57,7 +57,8 @@ local user_config = nil
 ---@param opts? HauntConfig Optional user configuration
 function M.setup(opts)
 	opts = opts or {}
-	user_config = vim.tbl_deep_extend("force", M.DEFAULT, opts)
+	local base = user_config or M.DEFAULT
+	user_config = vim.tbl_deep_extend("force", base, opts)
 end
 
 ---@private
