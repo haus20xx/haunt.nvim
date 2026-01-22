@@ -94,9 +94,21 @@ local function get_git_branch()
 end
 
 --- Set custom data directory
----@param dir string|nil Custom data directory path
+--- Expands ~ to home directory and ensures trailing slash
+---@param dir string|nil Custom data directory path, or nil to reset to default
 function M.set_data_dir(dir)
-	custom_data_dir = dir
+	if dir == nil then
+		custom_data_dir = nil
+		return
+	end
+
+	local expanded = vim.fn.expand(dir)
+
+	if expanded:sub(-1) ~= "/" then
+		expanded = expanded .. "/"
+	end
+
+	custom_data_dir = expanded
 end
 
 --- Ensures the haunt data directory exists
