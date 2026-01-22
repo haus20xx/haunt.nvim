@@ -133,7 +133,7 @@ describe("haunt.picker", function()
 			assert.is_not_nil(mock_snacks.picker_config)
 		end)
 
-		it("notifies error when Snacks is not available", function()
+		it("falls back to vim.ui.select when Snacks is not available", function()
 			-- Remove Snacks from package.loaded to simulate it not being installed
 			package.loaded["snacks"] = nil
 
@@ -145,16 +145,23 @@ describe("haunt.picker", function()
 			vim.api.nvim_win_set_cursor(0, { 1, 0 })
 			api.annotate("Test")
 
-			-- Clear previous notifications
-			notifications = {}
+			-- Mock vim.ui.select
+			local ui_select_called = false
+			local ui_select_items = nil
+			local original_ui_select = vim.ui.select
+			vim.ui.select = function(items, opts, on_choice)
+				ui_select_called = true
+				ui_select_items = items
+			end
 
 			picker.show()
 
-			assert.are.equal(1, #notifications)
-			assert.is_truthy(notifications[1].msg:match("Snacks.nvim is not installed"))
-			assert.are.equal(vim.log.levels.ERROR, notifications[1].level)
+			assert.is_true(ui_select_called)
+			assert.are.equal(1, #ui_select_items)
+			assert.is_truthy(ui_select_items[1].text:match("Test"))
 
-			-- Restore mock for other tests
+			-- Restore
+			vim.ui.select = original_ui_select
 			package.loaded["snacks"] = mock_snacks
 		end)
 
