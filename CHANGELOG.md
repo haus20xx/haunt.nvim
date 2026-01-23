@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.4.2...v0.5.0) (2026-01-23)
+
+
+### Features
+
+* add :HauntChangeDataDir user command ([84af480](https://github.com/TheNoeTrevino/haunt.nvim/commit/84af4808e84e864e14f822ce2444ddd9b64c3178))
+* add change data dir during usage ([9ea50db](https://github.com/TheNoeTrevino/haunt.nvim/commit/9ea50db8c791fc63f3fb3953308fcd581ee690a4))
+* **picker:** fall back to vim.ui.select if snacks.nvim is not available ([af0201b](https://github.com/TheNoeTrevino/haunt.nvim/commit/af0201b392b8f7dfb57cf6692da0e30ae5643a09))
+* **picker:** fallback to vim.ui.select if snacks.nvim unavailable ([29a1080](https://github.com/TheNoeTrevino/haunt.nvim/commit/29a1080e7937d1de8cafe41f5f3f8de338fb8647))
+
+
+### Bug Fixes
+
+* add stackable .setups ([58c02e0](https://github.com/TheNoeTrevino/haunt.nvim/commit/58c02e0806ece378c8b0af7ae2627dea61a54a32))
+* expand tilde and ensure trailing slash in set_data_dir ([208bc58](https://github.com/TheNoeTrevino/haunt.nvim/commit/208bc582dc9df96ee986bad7d1711feccf3bf20f))
+* self assign workflow ([fc7ee83](https://github.com/TheNoeTrevino/haunt.nvim/commit/fc7ee83ae10bf8a5e48fd529ea8c06b318666105))
+* self assign workflow ([cb6f0f2](https://github.com/TheNoeTrevino/haunt.nvim/commit/cb6f0f2492f18d734464d6aeee8334d6c0a3266d))
+* **text:** check if vim.ui.select fallback is triggered properly ([92f25dc](https://github.com/TheNoeTrevino/haunt.nvim/commit/92f25dcc893009c077ed8d143135ab0a82cf5954))
+
 ## [0.4.2](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.4.1...v0.4.2) (2026-01-21)
 
 
