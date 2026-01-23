@@ -9,6 +9,7 @@
 ---@field get_extmark_line fun(bufnr: number, extmark_id: number): number|nil
 ---@field delete_bookmark_mark fun(bufnr: number, extmark_id: number)
 ---@field clear_buffer_marks fun(bufnr: number)
+---@field clear_buffer_signs fun(bufnr: number): boolean
 ---@field place_sign fun(bufnr: number, line: number, sign_id: number)
 ---@field unplace_sign fun(bufnr: number, sign_id: number)
 
@@ -319,6 +320,18 @@ function M.unplace_sign(bufnr, sign_id)
 		buffer = bufnr,
 		id = sign_id,
 	})
+end
+
+--- Clear all haunt signs from a buffer
+---@param bufnr number Buffer number to clear signs from
+---@return boolean success True if clearing was successful
+function M.clear_buffer_signs(bufnr)
+	if not is_valid_buffer(bufnr) then
+		return false
+	end
+
+	vim.fn.sign_unplace(SIGN_GROUP, { buffer = bufnr })
+	return true
 end
 
 return M

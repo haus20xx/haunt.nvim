@@ -1,6 +1,7 @@
 ---@class RestorationModule
 ---@field restore_buffer_bookmarks fun(bufnr: number, annotations_visible: boolean): boolean
 ---@field cleanup_buffer_tracking fun(bufnr: number)
+---@field reset_tracking fun()
 
 ---@type RestorationModule
 ---@diagnostic disable-next-line: missing-fields
@@ -153,6 +154,12 @@ end
 ---@param bufnr number Buffer number that was deleted
 function M.cleanup_buffer_tracking(bufnr)
 	restored_buffers[bufnr] = nil
+end
+
+--- Reset all restoration tracking
+--- Used when changing data_dir to allow buffers to be re-restored
+function M.reset_tracking()
+	restored_buffers = {}
 end
 
 return M

@@ -19,7 +19,7 @@
 ---@field annotation_extmark_id number|nil Extmark ID for annotation display (internal)
 
 ---@class PersistenceModule
----@field set_data_dir fun(dir: string)
+---@field set_data_dir fun(dir: string|nil)
 ---@field ensure_data_dir fun(): string|nil, string|nil
 ---@field get_git_info fun(): {root: string|nil, branch: string|nil}
 ---@field get_storage_path fun(): string|nil, string|nil
@@ -94,9 +94,21 @@ local function get_git_branch()
 end
 
 --- Set custom data directory
----@param dir string|nil Custom data directory path
+--- Expands ~ to home directory and ensures trailing slash
+---@param dir string|nil Custom data directory path, or nil to reset to default
 function M.set_data_dir(dir)
-	custom_data_dir = dir
+	if dir == nil then
+		custom_data_dir = nil
+		return
+	end
+
+	local expanded = vim.fn.expand(dir)
+
+	if expanded:sub(-1) ~= "/" then
+		expanded = expanded .. "/"
+	end
+
+	custom_data_dir = expanded
 end
 
 --- Ensures the haunt data directory exists

@@ -13,6 +13,7 @@
 --- `:HauntList` - Open interactive picker to browse all bookmarks
 --- `:HauntClear` - Clear all bookmarks in current buffer
 --- `:HauntClearAll` - Clear all bookmarks across all files
+--- `:HauntChangeDataDir [path]` - Change bookmark data directory (for project-specific bookmarks)
 ---
 
 -- haunt.nvim plugin loader
@@ -41,6 +42,7 @@ local commands = {
 	HauntDelete = { fn = "delete", desc = "Delete bookmark at current line" },
 	HauntQf = { fn = "to_quickfix", desc = "Send Buffer Annotations to Quickfix List", args = { current_buffer = true } },
 	HauntQfAll = { fn = "to_quickfix", desc = "Send All Annotations to Quickfix List" },
+	HauntChangeDataDir = { fn = "change_data_dir", desc = "Change bookmark data directory", has_args = true },
 }
 
 for name, info in pairs(commands) do

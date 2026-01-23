@@ -58,6 +58,54 @@ describe("haunt.persistence", function()
 		end)
 	end)
 
+	describe("set_data_dir", function()
+		after_each(function()
+			persistence.set_data_dir(nil)
+		end)
+
+		it("expands tilde to home directory", function()
+			local home = vim.fn.expand("~")
+			persistence.set_data_dir("~/test_haunt_dir/")
+
+			local result = persistence.ensure_data_dir()
+			assert.are.equal(home .. "/test_haunt_dir/", result)
+
+			vim.fn.delete(home .. "/test_haunt_dir", "rf")
+		end)
+
+		it("adds trailing slash if missing", function()
+			local temp_dir = vim.fn.tempname() .. "_haunt_test"
+			persistence.set_data_dir(temp_dir)
+
+			local result = persistence.ensure_data_dir()
+			assert.are.equal(temp_dir .. "/", result)
+
+			vim.fn.delete(temp_dir, "rf")
+		end)
+
+		it("preserves trailing slash if present", function()
+			local temp_dir = vim.fn.tempname() .. "_haunt_test/"
+			persistence.set_data_dir(temp_dir)
+
+			local result = persistence.ensure_data_dir()
+			assert.are.equal(temp_dir, result)
+
+			vim.fn.delete(temp_dir, "rf")
+		end)
+
+		it("resets to default when passed nil", function()
+			local config = require("haunt.config")
+			local temp_dir = vim.fn.tempname() .. "_haunt_test/"
+			persistence.set_data_dir(temp_dir)
+
+			assert.are.equal(temp_dir, persistence.ensure_data_dir())
+
+			persistence.set_data_dir(nil)
+
+			assert.are.equal(config.DEFAULT_DATA_DIR, persistence.ensure_data_dir())
+		end)
+	end)
+
 	describe("create_bookmark", function()
 		it("creates bookmark with all fields", function()
 			local bookmark = persistence.create_bookmark("/tmp/test.lua", 42, "Test note")

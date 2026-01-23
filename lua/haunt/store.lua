@@ -2,6 +2,7 @@
 ---@field get_bookmarks fun(): Bookmark[]
 ---@field has_bookmarks fun(): boolean
 ---@field load fun(): boolean
+---@field reload fun()
 ---@field save fun(): boolean
 ---@field get_quickfix_items fun(opts?: QuickfixOpts): QuickfixItem[]
 ---@field find_by_id fun(bookmark_id: string): Bookmark|nil, number|nil
@@ -287,6 +288,17 @@ function M.load()
 	_loaded = true
 
 	return true
+end
+
+--- Reset state and reload bookmarks from persistent storage.
+---
+--- Clears all in-memory bookmarks and reloads from disk.
+--- Used when changing data_dir to load from a new location.
+function M.reload()
+	bookmarks = {}
+	bookmarks_by_file = {}
+	_loaded = false
+	M.load()
 end
 
 --- Save bookmarks to persistent storage.

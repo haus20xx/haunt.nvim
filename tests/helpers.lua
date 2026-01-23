@@ -289,4 +289,54 @@ function M.is_quickfix_open()
 	return false
 end
 
+--- Create a temporary directory for testing data_dir changes
+---@return string dir_path Path to the temporary directory (with trailing slash)
+function M.create_temp_data_dir()
+	local dir = vim.fn.tempname() .. "_haunt_test/"
+	vim.fn.mkdir(dir, "p")
+	return dir
+end
+
+--- Clean up a temporary directory
+---@param dir_path string Path to remove
+function M.cleanup_temp_dir(dir_path)
+	if dir_path and vim.fn.isdirectory(dir_path) == 1 then
+		vim.fn.delete(dir_path, "rf")
+	end
+end
+
+--- Create a bookmarks JSON file in a data directory
+--- This simulates pre-existing bookmarks for testing change_data_dir
+---@param data_dir string The data directory path
+---@param bookmarks table[] Array of bookmark tables
+---@param storage_hash? string Optional hash for filename (defaults to a test hash)
+---@return string filepath The path to the created JSON file
+function M.create_bookmarks_file(data_dir, bookmarks, storage_hash)
+	local hash = storage_hash or "test12345678"
+	local filepath = data_dir .. hash .. ".json"
+	local data = {
+		version = 1,
+		bookmarks = bookmarks,
+	}
+	local json_str = vim.json.encode(data)
+	vim.fn.writefile({ json_str }, filepath)
+	return filepath
+end
+
+--- Read bookmarks from a JSON file in a data directory
+---@param filepath string Path to the JSON file
+---@return table|nil data The parsed JSON data, or nil if file doesn't exist
+function M.read_bookmarks_file(filepath)
+	if vim.fn.filereadable(filepath) == 0 then
+		return nil
+	end
+	local lines = vim.fn.readfile(filepath)
+	local json_str = table.concat(lines, "\n")
+	local ok, data = pcall(vim.json.decode, json_str)
+	if ok then
+		return data
+	end
+	return nil
+end
+
 return M

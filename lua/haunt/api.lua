@@ -27,6 +27,7 @@
 ---@field to_quickfix fun(opts?: QuickfixOpts): boolean
 ---@field yank_locations fun(opts?: SidekickOpts): boolean
 ---@field cleanup_buffer_tracking fun(bufnr: number)
+---@field change_data_dir fun(new_dir: string|nil): boolean
 ---@field _reset_for_testing fun()
 
 ---@private
@@ -823,6 +824,58 @@ function M.cleanup_buffer_tracking(bufnr)
 	ensure_modules()
 	---@cast restoration -nil
 	restoration.cleanup_buffer_tracking(bufnr)
+end
+
+--- Change the data directory and reload all bookmarks.
+---
+--- Saves current bookmarks to the old data_dir, clears all visual elements,
+--- then loads bookmarks from the new location and restores visuals.
+--- This is useful for autocommands that need to switch bookmark contexts.
+---
+---@param new_dir string|nil The new data directory path, or nil to reset to default
+---@return boolean success True if the change was successful
+---
+---@usage >lua
+---   -- Switch to a project-specific bookmark directory
+---   require('haunt.api').change_data_dir('/path/to/project/.bookmarks/')
+---
+---   -- Reset to default data directory
+---   require('haunt.api').change_data_dir(nil)
+--- <
+function M.change_data_dir(new_dir)
+	ensure_modules()
+	---@cast store -nil
+	---@cast display -nil
+	---@cast persistence -nil
+	---@cast restoration -nil
+
+	store.save()
+
+	-- Clear visuals from all loaded buffers
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
+			display.clear_buffer_marks(bufnr)
+			display.clear_buffer_signs(bufnr)
+		end
+	end
+
+	-- Clear restoration tracking so buffers can be re-restored
+	restoration.reset_tracking()
+
+	-- Set new data_dir in persistence
+	persistence.set_data_dir(new_dir)
+
+	-- Reset store and reload from new location
+	store.reload()
+
+	-- Restore visuals for all loaded buffers
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
+			restoration.restore_buffer_bookmarks(bufnr, _annotations_visible)
+		end
+	end
+
+	return true
 end
 
 --- Reset internal state for testing purposes only
