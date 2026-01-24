@@ -4,14 +4,16 @@
 --- # Picker ~
 ---
 --- The picker provides an interactive interface to browse and manage bookmarks.
---- Supports Snacks.nvim (https://github.com/folke/snacks.nvim) and
---- Telescope.nvim (https://github.com/nvim-telescope/telescope.nvim).
---- Falls back to vim.ui.select for basic functionality if neither is available.
+--- Supports Snacks.nvim (https://github.com/folke/snacks.nvim),
+--- Telescope.nvim (https://github.com/nvim-telescope/telescope.nvim), and
+--- fzf-lua (https://github.com/ibhagwan/fzf-lua).
+--- Falls back to vim.ui.select for basic functionality if none are available.
 ---
 --- Configure which picker to use via |HauntConfig|.picker:
----   - `"auto"` (default): Try Snacks first, then Telescope, then vim.ui.select
+---   - `"auto"` (default): Try Snacks, Telescope, fzf-lua, then vim.ui.select
 ---   - `"snacks"`: Use Snacks.nvim picker
 ---   - `"telescope"`: Use Telescope.nvim picker
+---   - `"fzf"`: Use fzf-lua picker
 ---
 --- Picker actions: ~
 ---   - `<CR>`: Jump to the selected bookmark
@@ -56,6 +58,7 @@ end
 
 local snacks = lazy_picker("snacks")
 local telescope = lazy_picker("telescope")
+local fzf = lazy_picker("fzf")
 local fallback = lazy_picker("fallback")
 
 ---@private
@@ -69,6 +72,10 @@ local function handle_auto_picker(opts)
 		return
 	end
 
+	if fzf.show(opts) then
+		return
+	end
+
 	fallback.show(opts)
 end
 
@@ -76,9 +83,10 @@ end
 ---
 --- Displays all bookmarks in an interactive picker. The picker used depends
 --- on the |HauntConfig|.picker setting:
----   - `"auto"` (default): Try Snacks first, then Telescope, then vim.ui.select
+---   - `"auto"` (default): Try Snacks, Telescope, fzf-lua, then vim.ui.select
 ---   - `"snacks"`: Use Snacks.nvim picker
 ---   - `"telescope"`: Use Telescope.nvim picker
+---   - `"fzf"`: Use fzf-lua picker
 ---
 --- Allows jumping to, deleting, or editing bookmark annotations, if you have
 --- snacks or telescope installed. Otherwise, falls back to a vim.ui.select
@@ -114,6 +122,13 @@ function M.show(opts)
 	if picker_type == "telescope" then
 		if not telescope.show(opts) then
 			vim.notify("haunt.nvim: Telescope.nvim is not available", vim.log.levels.WARN)
+		end
+		return
+	end
+
+	if picker_type == "fzf" then
+		if not fzf.show(opts) then
+			vim.notify("haunt.nvim: fzf-lua is not available", vim.log.levels.WARN)
 		end
 		return
 	end
