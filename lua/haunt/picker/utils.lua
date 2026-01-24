@@ -6,7 +6,31 @@
 --- Shared utilities for all picker implementations.
 --- This module provides common functions used by Snacks, Telescope, and fallback pickers.
 
----@private
+---@class PickerItem
+---@field idx number Index in the bookmark list
+---@field score number Score for sorting (same as idx)
+---@field file string Absolute file path
+---@field pos number[] Position as {line, col}
+---@field text string Formatted display text
+---@field note string|nil Annotation text if present
+---@field id string Unique bookmark identifier
+---@field line number 1-based line number
+
+---@class PickerModule
+---@field show fun(opts?: table): boolean Show the picker
+---@field is_available fun(): boolean Check if the picker backend is available
+---@field set_picker_module fun(module: table) Set parent module reference for reopening
+
+---@class PickerUtils
+---@field ensure_modules fun()
+---@field get_api fun(): ApiModule
+---@field get_haunt fun(): HauntModule
+---@field with_buffer_context fun(bufnr: number, line: number, callback: function): any
+---@field build_picker_items fun(bookmarks: Bookmark[]): PickerItem[]
+---@field jump_to_bookmark fun(item: PickerItem)
+
+---@type PickerUtils
+---@diagnostic disable-next-line: missing-fields
 local M = {}
 
 ---@private
@@ -89,7 +113,7 @@ end
 
 --- Build picker items from bookmarks
 ---@param bookmarks Bookmark[]
----@return table[]
+---@return PickerItem[]
 function M.build_picker_items(bookmarks)
 	local items = {}
 	for i, bm in ipairs(bookmarks) do
@@ -112,7 +136,7 @@ function M.build_picker_items(bookmarks)
 end
 
 --- Jump to a bookmark item (shared logic for all pickers)
----@param item table The selected bookmark item
+---@param item PickerItem The selected bookmark item
 function M.jump_to_bookmark(item)
 	if not item then
 		return
