@@ -10,6 +10,8 @@
 ---@field idx number Index in the bookmark list
 ---@field score number Score for sorting (same as idx)
 ---@field file string Absolute file path
+---@field relpath string Relative file path (cached)
+---@field filename string Filename only (cached)
 ---@field pos number[] Position as {line, col}
 ---@field text string Formatted display text
 ---@field note string|nil Annotation text if present
@@ -117,7 +119,9 @@ end
 function M.build_picker_items(bookmarks)
 	local items = {}
 	for i, bm in ipairs(bookmarks) do
-		local text = vim.fn.fnamemodify(bm.file, ":.") .. ":" .. bm.line
+		local relpath = vim.fn.fnamemodify(bm.file, ":.")
+		local filename = vim.fn.fnamemodify(bm.file, ":t")
+		local text = relpath .. ":" .. bm.line
 		if bm.note and bm.note ~= "" then
 			text = text .. " " .. bm.note
 		end
@@ -125,6 +129,8 @@ function M.build_picker_items(bookmarks)
 			idx = i,
 			score = i,
 			file = bm.file,
+			relpath = relpath,
+			filename = filename,
 			pos = { bm.line, 0 },
 			text = text,
 			note = bm.note,

@@ -75,8 +75,7 @@ function M.show(opts)
 	local max_filename_width = 0
 	local max_line_width = 0
 	for _, item in ipairs(items) do
-		local relpath = vim.fn.fnamemodify(item.file, ":.")
-		max_filename_width = math.max(max_filename_width, #relpath)
+		max_filename_width = math.max(max_filename_width, #item.relpath)
 		max_line_width = math.max(max_line_width, #tostring(item.line))
 	end
 
@@ -97,8 +96,8 @@ function M.show(opts)
 	---@return string display_string
 	---@return table highlight_positions
 	local make_display = function(entry)
-		local relpath = vim.fn.fnamemodify(entry.value.file, ":.")
-		local filename = vim.fn.fnamemodify(entry.value.file, ":t")
+		local relpath = entry.value.relpath
+		local filename = entry.value.filename
 
 		-- Get file icon and highlight
 		local icon, icon_hl = "", nil

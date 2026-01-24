@@ -168,10 +168,9 @@ function M.show(opts)
 		format = function(item, _)
 			local result = {}
 
-			-- Get path relative to current working directory
-			local relpath = vim.fn.fnamemodify(item.file, ":.")
-			local filename = vim.fn.fnamemodify(relpath, ":t")
-			local dir = vim.fn.fnamemodify(relpath, ":h")
+			-- Use cached path values
+			local filename = item.filename
+			local dir = vim.fn.fnamemodify(item.relpath, ":h")
 			if dir == "." then
 				dir = ""
 			else
