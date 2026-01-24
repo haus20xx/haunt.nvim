@@ -20,7 +20,11 @@
 ---
 --- The keybindings can be customized via |HauntConfig|.picker_keys.
 
----@private
+---@class PickerRouter
+---@field show fun(opts?: table) Show the bookmark picker
+
+---@type PickerRouter
+---@diagnostic disable-next-line: missing-fields
 local M = {}
 
 ---@private
@@ -44,11 +48,21 @@ end
 ---
 --- Allows jumping to, deleting, or editing bookmark annotations.
 ---
+--- Note: The opts parameter is passed directly to the underlying picker
+--- implementation. It is up to the user to ensure they're passing the
+--- correct type for their configured picker. Consider annotating the type
+--- yourself, e.g.:
+--- >lua
+---   ---@type snacks.picker.Config
+---   local opts = { ... }
+---   require('haunt.picker').show(opts)
+--- <
+---
 ---@usage >lua
 ---   -- Show the picker
 ---   require('haunt.picker').show()
 ---<
----@param opts? table Options to pass to the underlying picker
+---@param opts? table Options passed to the underlying picker
 function M.show(opts)
 	ensure_modules()
 	---@cast haunt -nil
