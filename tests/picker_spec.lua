@@ -11,6 +11,9 @@ describe("haunt.picker", function()
 	-- Mock Snacks.nvim picker
 	local mock_snacks
 
+	-- Mock Telescope.nvim
+	local mock_telescope
+
 	-- Mock vim functions
 	local original_notify
 	local original_input
@@ -39,6 +42,21 @@ describe("haunt.picker", function()
 			mock.picker_config = config
 			return mock.picker_instance
 		end
+		return mock
+	end
+
+	-- Create mock Telescope
+	local function create_mock_telescope()
+		local mock = {
+			picker_called = false,
+			picker_config = nil,
+			picker_instance = {
+				find_called = false,
+				find = function(self)
+					self.find_called = true
+				end,
+			},
+		}
 		return mock
 	end
 
@@ -859,6 +877,98 @@ describe("haunt.picker", function()
 			assert.are.equal(3, cursor[1])
 
 			helpers.cleanup_buffer(bufnr, test_file)
+		end)
+	end)
+
+	describe("picker config option", function()
+		local bufnr, test_file
+
+		before_each(function()
+			bufnr, test_file = helpers.create_test_buffer()
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			api.annotate("Test bookmark")
+		end)
+
+		after_each(function()
+			helpers.cleanup_buffer(bufnr, test_file)
+		end)
+
+		it("defaults to 'auto' picker", function()
+			local cfg = haunt.get_config()
+			assert.are.equal("auto", cfg.picker)
+		end)
+
+		it("uses snacks when picker is set to 'snacks'", function()
+			haunt.setup({ picker = "snacks" })
+
+			picker.show()
+
+			assert.is_true(mock_snacks.picker_called)
+		end)
+
+		it("warns when snacks is not available and picker is 'snacks'", function()
+			package.loaded["snacks"] = nil
+			package.loaded["haunt.picker"] = nil
+			picker = require("haunt.picker")
+
+			haunt.setup({ picker = "snacks" })
+			picker.show()
+
+			local has_warning = false
+			for _, notif in ipairs(notifications) do
+				if notif.msg:match("Snacks.nvim is not available") then
+					has_warning = true
+					break
+				end
+			end
+			assert.is_true(has_warning)
+
+			-- Restore
+			package.loaded["snacks"] = mock_snacks
+		end)
+
+		it("warns when telescope is not available and picker is 'telescope'", function()
+			package.loaded["snacks"] = nil
+			package.loaded["telescope"] = nil
+			package.loaded["haunt.picker"] = nil
+			picker = require("haunt.picker")
+
+			haunt.setup({ picker = "telescope" })
+			picker.show()
+
+			local has_warning = false
+			for _, notif in ipairs(notifications) do
+				if notif.msg:match("Telescope.nvim is not available") then
+					has_warning = true
+					break
+				end
+			end
+			assert.is_true(has_warning)
+
+			-- Restore
+			package.loaded["snacks"] = mock_snacks
+		end)
+
+		it("falls back to vim.ui.select in auto mode when no picker available", function()
+			package.loaded["snacks"] = nil
+			package.loaded["telescope"] = nil
+			package.loaded["haunt.picker"] = nil
+			picker = require("haunt.picker")
+
+			local ui_select_called = false
+			local original_ui_select = vim.ui.select
+			vim.ui.select = function(items, opts, on_choice)
+				ui_select_called = true
+			end
+
+			haunt.setup({ picker = "auto" })
+			picker.show()
+
+			assert.is_true(ui_select_called)
+
+			-- Restore
+			vim.ui.select = original_ui_select
+			package.loaded["snacks"] = mock_snacks
 		end)
 	end)
 end)
