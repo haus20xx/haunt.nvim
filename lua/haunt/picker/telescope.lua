@@ -13,19 +13,18 @@
 ---
 --- The keybindings can be customized via |HauntConfig|.picker_keys.
 
----@private
+---@type PickerModule
+---@diagnostic disable-next-line: missing-fields
 local M = {}
 
 local utils = require("haunt.picker.utils")
 
 ---@private
---- Reference to the parent picker module for reopening after edit
----@type table|nil
+---@type PickerRouter|nil
 local picker_module = nil
 
----@private
---- Set the parent picker module reference
----@param module table The parent picker module
+--- Set the parent picker module reference for reopening after edit
+---@param module PickerRouter The parent picker module
 function M.set_picker_module(module)
 	picker_module = module
 end
@@ -38,7 +37,7 @@ function M.is_available()
 end
 
 --- Show the Telescope.nvim picker
----@param opts? table Options to pass to Telescope
+---@param opts? table Options to pass to Telescope picker
 ---@return boolean success True if picker was shown
 function M.show(opts)
 	local has_telescope, _ = pcall(require, "telescope")
@@ -94,7 +93,9 @@ function M.show(opts)
 		},
 	})
 
-	-- Custom display function for bookmark entries
+	---@param entry {value: PickerItem, ordinal: string, filename: string, lnum: number}
+	---@return string display_string
+	---@return table highlight_positions
 	local make_display = function(entry)
 		local relpath = vim.fn.fnamemodify(entry.value.file, ":.")
 		local filename = vim.fn.fnamemodify(entry.value.file, ":t")
@@ -121,7 +122,7 @@ function M.show(opts)
 		})
 	end
 
-	-- Delete action for Telescope
+	---@param prompt_bufnr number Telescope prompt buffer number
 	local function telescope_delete(prompt_bufnr)
 		local selection = action_state.get_selected_entry()
 		if not selection then
@@ -163,7 +164,7 @@ function M.show(opts)
 		)
 	end
 
-	-- Edit annotation action for Telescope
+	---@param prompt_bufnr number Telescope prompt buffer number
 	local function telescope_edit_annotation(prompt_bufnr)
 		local selection = action_state.get_selected_entry()
 		if not selection then
@@ -211,7 +212,9 @@ function M.show(opts)
 		end
 	end
 
-	-- Build attach_mappings function for custom keybindings
+	---@param prompt_bufnr number Telescope prompt buffer number
+	---@param map fun(mode: string, key: string, action: function) Telescope key mapper
+	---@return boolean
 	local function attach_mappings(prompt_bufnr, map)
 		-- Replace default select action with jump to bookmark
 		actions.select_default:replace(function()

@@ -11,14 +11,30 @@
 ---
 --- Note: Delete and edit annotation actions are not available in the fallback picker.
 
----@private
+---@type PickerModule
+---@diagnostic disable-next-line: missing-fields
 local M = {}
 
 local utils = require("haunt.picker.utils")
 
+--- Check if the fallback picker is available
+--- Always returns true since vim.ui.select is built into Neovim
+---@return boolean available Always true
+function M.is_available()
+	return true
+end
+
+--- Set the parent picker module reference
+--- No-op for fallback since it doesn't support delete/edit actions that need reopening
+---@param _ PickerRouter The parent picker module (unused)
+function M.set_picker_module(_)
+	-- No-op: fallback doesn't support actions that need reopening
+end
+
 --- Show the fallback picker using vim.ui.select
----@return boolean success Always returns true (fallback is always available)
-function M.show()
+---@param _opts? table Options (unused, for interface compliance)
+---@return boolean success Always returns true
+function M.show(_opts)
 	local api = utils.get_api()
 
 	local bookmarks = api.get_bookmarks()

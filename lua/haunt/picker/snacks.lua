@@ -13,28 +13,32 @@
 ---
 --- The keybindings can be customized via |HauntConfig|.picker_keys.
 
----@private
+---@type PickerModule
+---@diagnostic disable-next-line: missing-fields
 local M = {}
 
 local utils = require("haunt.picker.utils")
 
 ---@private
---- Reference to the parent picker module for reopening after edit
----@type table|nil
+---@type PickerRouter|nil
 local picker_module = nil
 
----@private
---- Set the parent picker module reference
----@param module table The parent picker module
+--- Set the parent picker module reference for reopening after edit
+---@param module PickerRouter The parent picker module
 function M.set_picker_module(module)
 	picker_module = module
 end
 
+--- Check if Snacks.nvim is available
+---@return boolean available True if Snacks.nvim is installed
+function M.is_available()
+	local ok, _ = pcall(require, "snacks")
+	return ok
+end
+
 ---@private
---- Handle deleting a bookmark from the Snacks picker
----@param picker table The Snacks picker instance
----@param item table|nil The selected bookmark item
----@return nil
+---@param picker snacks.Picker The Snacks picker instance
+---@param item PickerItem|nil The selected bookmark item
 local function handle_delete(picker, item)
 	local api = utils.get_api()
 
@@ -63,10 +67,8 @@ local function handle_delete(picker, item)
 end
 
 ---@private
---- Handle editing a bookmark annotation from the Snacks picker
----@param picker table The Snacks picker instance
----@param item table|nil The selected bookmark item
----@return nil
+---@param picker snacks.Picker The Snacks picker instance
+---@param item PickerItem|nil The selected bookmark item
 local function handle_edit_annotation(picker, item)
 	local api = utils.get_api()
 
@@ -113,15 +115,8 @@ local function handle_edit_annotation(picker, item)
 	end
 end
 
---- Check if Snacks.nvim is available
----@return boolean available True if Snacks.nvim is installed
-function M.is_available()
-	local ok, _ = pcall(require, "snacks")
-	return ok
-end
-
 --- Show the Snacks.nvim picker
----@param opts? snacks.picker.Config Options to pass to Snacks.picker
+---@param opts? table Options to pass to Snacks.picker (see snacks.picker.Config)
 ---@return boolean success True if picker was shown
 function M.show(opts)
 	local ok, Snacks = pcall(require, "snacks")
