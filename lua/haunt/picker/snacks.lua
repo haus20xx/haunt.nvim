@@ -165,7 +165,7 @@ function M.show(opts)
 			return utils.build_picker_items(api.get_bookmarks())
 		end,
 		-- Custom format function for bookmark items
-		format = function(item, picker)
+		format = function(item, _)
 			local result = {}
 
 			-- Get path relative to current working directory
@@ -198,7 +198,7 @@ function M.show(opts)
 				return
 			end
 			picker:close()
-			utils.jump_to_bookmark(item)
+			utils.jump_to_bookmark(item --[[@as PickerItem]])
 		end,
 		actions = {
 			delete = handle_delete,

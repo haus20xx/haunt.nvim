@@ -217,8 +217,7 @@ local function save_all_bookmarks()
 end
 
 -- Debounce timer for saving bookmarks after text changes
----@type uv_timer_t
-local save_timer = vim.loop.new_timer()
+local save_timer = assert(vim.uv.new_timer())
 local SAVE_DEBOUNCE_DELAY = 500 -- milliseconds
 
 -- Debounced save function for text change events
