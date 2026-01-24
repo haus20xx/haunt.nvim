@@ -146,18 +146,21 @@ function M.show(opts)
 		-- Refresh picker to show updated list
 		local current_picker = action_state.get_current_picker(prompt_bufnr)
 		local new_items = utils.build_picker_items(remaining)
-		current_picker:refresh(finders.new_table({
-			results = new_items,
-			entry_maker = function(item)
-				return {
-					value = item,
-					display = make_display,
-					ordinal = item.text,
-					filename = item.file,
-					lnum = item.line,
-				}
-			end,
-		}), { reset_prompt = false })
+		current_picker:refresh(
+			finders.new_table({
+				results = new_items,
+				entry_maker = function(item)
+					return {
+						value = item,
+						display = make_display,
+						ordinal = item.text,
+						filename = item.file,
+						lnum = item.line,
+					}
+				end,
+			}),
+			{ reset_prompt = false }
+		)
 	end
 
 	-- Edit annotation action for Telescope
