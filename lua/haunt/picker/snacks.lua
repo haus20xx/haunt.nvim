@@ -68,51 +68,19 @@ end
 
 ---@private
 ---@param picker snacks.Picker The Snacks picker instance
----@param item PickerItem|nil The selected bookmark item
+---@param item PickerItem The selected bookmark item
 local function handle_edit_annotation(picker, item)
-	local api = utils.get_api()
-
-	if not item then
-		return
-	end
-
-	-- Prompt for new annotation
-	local default_text = item.note or ""
-
-	-- Close picker temporarily to show input prompt clearly
-	picker:close()
-
-	local annotation = vim.fn.input({
-		prompt = "Annotation: ",
-		default = default_text,
+	utils.handle_edit_annotation({
+		item = item,
+		close_picker = function()
+			picker:close()
+		end,
+		reopen_picker = function()
+			if picker_module then
+				picker_module.show()
+			end
+		end,
 	})
-
-	-- If user cancelled (ESC), annotation will be empty string
-	-- Only proceed if something was entered or if clearing existing annotation
-	if annotation == "" and default_text == "" then
-		-- User cancelled with no existing annotation, reopen picker
-		if picker_module then
-			picker_module.show()
-		end
-		return
-	end
-
-	-- Open the file in a buffer if not already open
-	local bufnr = vim.fn.bufnr(item.file)
-	if bufnr == -1 then
-		bufnr = vim.fn.bufadd(item.file)
-		vim.fn.bufload(bufnr)
-	end
-
-	-- Use helper to execute annotate in the buffer context
-	utils.with_buffer_context(bufnr, item.line, function()
-		api.annotate(annotation)
-	end)
-
-	-- Reopen the picker with updated data
-	if picker_module then
-		picker_module.show()
-	end
 end
 
 --- Show the Snacks.nvim picker

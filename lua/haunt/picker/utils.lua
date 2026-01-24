@@ -23,6 +23,11 @@
 ---@field is_available fun(): boolean Check if the picker backend is available
 ---@field set_picker_module fun(module: table) Set parent module reference for reopening
 
+---@class EditAnnotationContext
+---@field item PickerItem The bookmark item to edit
+---@field close_picker fun() Function to close the current picker
+---@field reopen_picker fun() Function to reopen the picker after edit
+
 ---@class PickerUtils
 ---@field ensure_modules fun()
 ---@field get_api fun(): ApiModule
@@ -30,6 +35,7 @@
 ---@field with_buffer_context fun(bufnr: number, line: number, callback: function): any
 ---@field build_picker_items fun(bookmarks: Bookmark[]): PickerItem[]
 ---@field jump_to_bookmark fun(item: PickerItem)
+---@field handle_edit_annotation fun(ctx: EditAnnotationContext)
 
 ---@type PickerUtils
 ---@diagnostic disable-next-line: missing-fields
@@ -161,6 +167,48 @@ function M.jump_to_bookmark(item)
 	-- Go to line and center
 	vim.api.nvim_win_set_cursor(0, { item.line, 0 })
 	vim.cmd("normal! zz")
+end
+
+--- Handle editing a bookmark annotation (shared across picker implementations)
+---@param ctx EditAnnotationContext
+function M.handle_edit_annotation(ctx)
+	local api_module = M.get_api()
+	local item = ctx.item
+
+	if not item then
+		return
+	end
+
+	local default_text = item.note or ""
+
+	-- Close picker temporarily to show input prompt clearly
+	ctx.close_picker()
+
+	local annotation = vim.fn.input({
+		prompt = "Annotation: ",
+		default = default_text,
+	})
+
+	-- If user cancelled (ESC) with no existing annotation, reopen picker
+	if annotation == "" and default_text == "" then
+		ctx.reopen_picker()
+		return
+	end
+
+	-- Open the file in a buffer if not already open
+	local bufnr = vim.fn.bufnr(item.file)
+	if bufnr == -1 then
+		bufnr = vim.fn.bufadd(item.file)
+		vim.fn.bufload(bufnr)
+	end
+
+	-- Execute annotate in the buffer context
+	M.with_buffer_context(bufnr, item.line, function()
+		api_module.annotate(annotation)
+	end)
+
+	-- Reopen the picker with updated data
+	ctx.reopen_picker()
 end
 
 return M
