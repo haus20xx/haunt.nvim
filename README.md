@@ -20,7 +20,7 @@ Keep your mental overhead to a minimum and never repeatedly rummage through your
     - [API](#api)
     - [User Commands](#user-commands)
   - [Integrations](#integrations)
-    - [Picker (snacks.nvim / telescope.nvim)](#picker-snacksnvim--telescopenvim)
+    - [Picker (snacks.nvim / telescope.nvim / fzf-lua)](#picker-snacksnvim--telescopenvim--fzf-lua)
     - [sidekick.nvim](#sidekicknvim)
     - [Git](#git)
     - [Project-Specific Bookmarks](#project-specific-bookmarks)
@@ -48,6 +48,7 @@ Keep your mental overhead to a minimum and never repeatedly rummage through your
 - Neovim 0.11 - virtual text
 - [snacks.nvim](https://github.com/folke/snacks.nvim) - picker integration. _(optional)_
 - [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) - picker integration. _(optional)_
+- [fzf-lua](https://github.com/ibhagwan/fzf-lua) - picker integration. _(optional)_
 - [sidekick.nvim](https://github.com/folke/sidekick.nvim) - 'AI' integration (and a cli tool of your choice). _(optional)_
 
 ## Installation
@@ -60,13 +61,13 @@ return {
   opts = {
     sign = "󱙝",
     sign_hl = "DiagnosticInfo",
-    virt_text_hl = "HauntAnnotation",
+    virt_text_hl = "HauntAnnotation", -- links to DiagnosticVirtualTextHint
     annotation_prefix = " 󰆉 ",
     line_hl = nil,
     virt_text_pos = "eol",
     data_dir = nil,
-    picker = "auto", -- "auto", "snacks", or "telescope"
-    picker_keys = {
+    picker = "auto", -- "auto", "snacks", "telescope", or "fzf"
+    picker_keys = { -- picker agnostic, we got you covered
       delete = { key = "d", mode = { "n" } },
       edit_annotation = { key = "a", mode = { "n" } },
     },
@@ -176,12 +177,13 @@ haunt.prev()
 -- Open the bookmark picker.
 --
 -- Displays all bookmarks in an interactive picker.
--- Supports Snacks.nvim and Telescope.nvim (configurable via `picker` option).
+-- Supports Snacks.nvim, Telescope.nvim, and fzf-lua (configurable via `picker` option).
 -- Allows jumping to, deleting, or editing bookmark annotations.
 -- see :h haunt-picker for more info
 haunt_picker.show()
 haunt_picker.show({ layout = { preset = "vscode" } }) -- Snacks options
 haunt_picker.show({ prompt_title = "My Bookmarks" })  -- Telescope options
+haunt_picker.show({ prompt = "Bookmarks> " })         -- fzf-lua options
 
 -- Get bookmark locations formatted for sidekick.nvim.
 -- Returns bookmarks in sidekick-compatible format:
@@ -220,13 +222,13 @@ I tried my best to expose as many useful functions as possible.
 
 ## Integrations 
 
-### Picker (snacks.nvim / telescope.nvim)
+### Picker (snacks.nvim / telescope.nvim / fzf-lua)
 
-Search, edit, and delete annotations from the picker using `snacks.nvim` or `telescope.nvim`.
+Search, edit, and delete annotations from the picker using `snacks.nvim`, `telescope.nvim`, or `fzf-lua`.
 
 https://github.com/user-attachments/assets/da112d01-b0bc-445d-8d60-edc324c5f31b
 
-By default, haunt.nvim uses `"auto"` mode which tries Snacks first, then Telescope, then falls back to `vim.ui.select`.
+By default, haunt.nvim uses `"auto"` mode which tries Snacks first, then Telescope, then fzf-lua, then falls back to `vim.ui.select`.
 
 You can explicitly choose your picker:
 
@@ -234,7 +236,7 @@ You can explicitly choose your picker:
 return {
   "TheNoeTrevino/haunt.nvim",
   opts = {
-    -- Choose your picker: "auto", "snacks", or "telescope"
+    -- Choose your picker: "auto", "snacks", "telescope", or "fzf"
     picker = "auto",
     -- Customize picker keybindings (works for both Snacks and Telescope)
     picker_keys = {
@@ -339,6 +341,5 @@ I hope this helps others with the same issues.
 - [ ] Users should be able to toggle notification. add a 'notify' option to config.
 this can take in a boolean, or a logging level. then, in the program, we can use
 a custom logger that uses vim.notify. we are gonna wanna use closure to store the log level and avoid recomputes
-- [ ] Integration for fzf-lua?
 
 </details>
