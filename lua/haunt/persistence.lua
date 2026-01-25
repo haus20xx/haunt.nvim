@@ -72,25 +72,28 @@ local function get_git_root()
 	return nil
 end
 
---- Gets the current git branch name
----@return string|nil branch The current git branch name, or nil if not in a git repo
+--- Gets the current git branch name or commit hash for detached HEAD
+---@return string|nil branch The current git branch name, short commit hash, or nil if not in a git repo
 local function get_git_branch()
-	-- Use --show-current which returns empty string for detached HEAD and repos with no commits
-	-- This is more appropriate than --abbrev-ref HEAD which returns "HEAD" for detached state
 	local result = vim.fn.systemlist("git branch --show-current")
 	local exit_code = vim.v.shell_error
 
 	if exit_code ~= 0 then
-		-- Don't warn here since get_git_root() already handles the "git not found" case
 		return nil
 	end
 
 	local branch = result[1]
-	-- Return nil for empty string (detached HEAD or no commits) or missing result
-	if not branch or branch == "" then
-		return nil
+	if branch and branch ~= "" then
+		return branch
 	end
-	return branch
+
+	-- Detached HEAD (e.g., tag checkout): use short commit hash as identifier
+	local hash_result = vim.fn.systemlist("git rev-parse --short HEAD")
+	if vim.v.shell_error == 0 and hash_result[1] and hash_result[1] ~= "" then
+		return hash_result[1]
+	end
+
+	return nil
 end
 
 --- Set custom data directory
@@ -148,7 +151,8 @@ function M.get_git_info()
 end
 
 --- Generates a storage path for the current git repository and branch
---- Uses an 8-character SHA256 hash of "repo_root|branch" for the filename
+--- Uses a 12-character SHA256 hash of "repo_root|branch" for the filename
+--- For detached HEAD states (e.g., tag checkouts), uses the short commit hash as identifier
 --- Falls back to CWD and "__default__" branch when not in a git repository
 ---@return string path The full path to the storage file
 function M.get_storage_path()
