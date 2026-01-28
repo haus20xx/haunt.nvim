@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.1](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.7.0...v0.7.1) (2026-01-28)
+
+
+### Performance Improvements
+
+* replace blocking ui write with aync write ([ef5d2d3](https://github.com/TheNoeTrevino/haunt.nvim/commit/ef5d2d346797042c569a2f6555218adde3cac6bf))
+* replace blocking ui write with aync write ([9f225a9](https://github.com/TheNoeTrevino/haunt.nvim/commit/9f225a99c69a08af0e2508eac83e3415a3f2aa27))
+
 ## [0.7.0](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.6.1...v0.7.0) (2026-01-25)
 
 
