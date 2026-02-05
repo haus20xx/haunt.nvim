@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.7.1...v0.8.0) (2026-02-05)
+
+
+### Features
+
+* annotation suffix ([1cf404c](https://github.com/TheNoeTrevino/haunt.nvim/commit/1cf404c8c82bd91b6f7b1f180daea3ae0a247976))
+
+
+### Bug Fixes
+
+* delayed window closing ([adba00a](https://github.com/TheNoeTrevino/haunt.nvim/commit/adba00a563f439f21ab3acc17de8262aab6030f6))
+* highlights getting wiped when colorscheme changes ([92986ea](https://github.com/TheNoeTrevino/haunt.nvim/commit/92986ea27b9562bc19cc3c00f3af5c330bb0af13))
+* highlights getting wiped when colorscheme changes ([2f067c7](https://github.com/TheNoeTrevino/haunt.nvim/commit/2f067c76d16b06fc32df27e18c6072b25bc137cb))
+
 ## [0.7.1](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.7.0...v0.7.1) (2026-01-28)
 
 
