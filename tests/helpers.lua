@@ -311,13 +311,44 @@ function M.cleanup_temp_dir(dir_path)
 	end
 end
 
---- Create a bookmarks JSON file in a data directory
---- This simulates pre-existing bookmarks for testing change_data_dir
+--- Create a bookmarks JSON file in a data directory (v2 format).
+--- For test ergonomics, any bookmark with an absolute path (starts with "/")
+--- is automatically flagged `absolute=true` unless it explicitly sets the
+--- field. This lets callers pass absolute paths (e.g., tempfiles) without
+--- having to mock project.get_root just to round-trip them.
 ---@param data_dir string The data directory path
 ---@param bookmarks table[] Array of bookmark tables
 ---@param storage_hash? string Optional hash for filename (defaults to a test hash)
 ---@return string filepath The path to the created JSON file
 function M.create_bookmarks_file(data_dir, bookmarks, storage_hash)
+	local hash = storage_hash or "test12345678"
+	local filepath = data_dir .. hash .. ".json"
+
+	local serialized = {}
+	for i, bm in ipairs(bookmarks) do
+		local copy = vim.deepcopy(bm)
+		if copy.absolute == nil and type(copy.file) == "string" and copy.file:sub(1, 1) == "/" then
+			copy.absolute = true
+		end
+		serialized[i] = copy
+	end
+
+	local data = {
+		version = 2,
+		bookmarks = serialized,
+	}
+	local json_str = vim.json.encode(data)
+	vim.fn.writefile({ json_str }, filepath)
+	return filepath
+end
+
+--- Create a v1 bookmarks JSON file in a data directory.
+--- Used by tests that specifically exercise the v1 rejection / migration path.
+---@param data_dir string The data directory path
+---@param bookmarks table[] Array of bookmark tables (absolute paths)
+---@param storage_hash? string Optional hash for filename (defaults to a test hash)
+---@return string filepath The path to the created JSON file
+function M.create_v1_bookmarks_file(data_dir, bookmarks, storage_hash)
 	local hash = storage_hash or "test12345678"
 	local filepath = data_dir .. hash .. ".json"
 	local data = {

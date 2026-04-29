@@ -360,12 +360,9 @@ describe("haunt.persistence", function()
 		end
 	end)
 
-	-- NOTE: These tests assert the on-disk shape of a save (no round-trip via
-	-- load_bookmarks), because save now writes v2 while load still understands
-	-- only v1. Proper round-trip tests will be re-enabled in task 168 once
-	-- load_bookmarks gains v2 support.
 	describe("save_bookmarks / load_bookmarks", function()
 		local test_file
+		local project_mock = require("tests.helpers.project_mock")
 
 		--- Read the saved JSON back as a raw table.
 		---@param path string
@@ -377,12 +374,17 @@ describe("haunt.persistence", function()
 		end
 
 		before_each(function()
+			-- Inject a stable project root so v2 save+load round-trips resolve to the
+			-- same project regardless of where the test runs.
+			project_mock.set({ root = "/tmp", branch = "main", project_id = "tmp" })
+
 			local test_dir = vim.fn.stdpath("data") .. "/haunt/test/"
 			vim.fn.mkdir(test_dir, "p")
 			test_file = test_dir .. "test_" .. os.time() .. ".json"
 		end)
 
 		after_each(function()
+			project_mock.restore()
 			if test_file and vim.fn.filereadable(test_file) == 1 then
 				vim.fn.delete(test_file)
 			end
@@ -407,6 +409,28 @@ describe("haunt.persistence", function()
 			assert.are.equal(bookmarks[1].id, data.bookmarks[1].id)
 		end)
 
+		it("round-trips bookmarks through save and load", function()
+			local bookmarks = {
+				persistence.create_bookmark("/tmp/file1.lua", 10, "First"),
+				persistence.create_bookmark("/tmp/file2.lua", 20, "Second"),
+				persistence.create_bookmark("/tmp/file3.lua", 30),
+			}
+
+			local save_ok = persistence.save_bookmarks(bookmarks, test_file)
+			assert.is_true(save_ok)
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.is_table(loaded)
+			assert.are.equal(3, #loaded)
+
+			for i = 1, 3 do
+				assert.are.equal(bookmarks[i].file, loaded[i].file)
+				assert.are.equal(bookmarks[i].line, loaded[i].line)
+				assert.are.equal(bookmarks[i].note, loaded[i].note)
+				assert.are.equal(bookmarks[i].id, loaded[i].id)
+			end
+		end)
+
 		it("returns empty table for non-existent file", function()
 			local loaded = persistence.load_bookmarks("/nonexistent/path.json")
 			assert.is_table(loaded)
@@ -421,6 +445,10 @@ describe("haunt.persistence", function()
 			local data = read_raw(test_file)
 			assert.are.equal(2, data.version)
 			assert.are.equal(0, #data.bookmarks)
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.is_table(loaded)
+			assert.are.equal(0, #loaded)
 		end)
 
 		it("deletes an existing file when saving an empty list", function()
@@ -434,7 +462,7 @@ describe("haunt.persistence", function()
 			assert.are.equal(0, vim.fn.filereadable(test_file))
 		end)
 
-		it("handles large bookmark sets (100 bookmarks)", function()
+		it("round-trips large bookmark sets (100 bookmarks)", function()
 			local bookmarks = {}
 			for i = 1, 100 do
 				table.insert(
@@ -450,9 +478,12 @@ describe("haunt.persistence", function()
 			assert.are.equal(2, data.version)
 			assert.are.equal(100, #data.bookmarks)
 
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.are.equal(100, #loaded)
 			for i = 1, 100 do
-				assert.are.equal(bookmarks[i].line, data.bookmarks[i].line)
-				assert.are.equal(bookmarks[i].id, data.bookmarks[i].id)
+				assert.are.equal(bookmarks[i].file, loaded[i].file)
+				assert.are.equal(bookmarks[i].line, loaded[i].line)
+				assert.are.equal(bookmarks[i].id, loaded[i].id)
 			end
 		end)
 	end)
@@ -567,6 +598,168 @@ describe("haunt.persistence", function()
 			assert.are.equal(2, data.version)
 			assert.are.equal("/some/path/file.lua", data.bookmarks[1].file)
 			assert.is_true(data.bookmarks[1].absolute)
+		end)
+	end)
+
+	describe("v2 load", function()
+		local project_mock = require("tests.helpers.project_mock")
+		local original_notify
+		local notify_calls
+		local test_file
+
+		before_each(function()
+			-- Capture vim.notify calls so version-related warnings can be asserted.
+			notify_calls = {}
+			original_notify = vim.notify
+			vim.notify = function(msg, level, opts)
+				table.insert(notify_calls, { msg = msg, level = level, opts = opts })
+			end
+
+			local test_dir = vim.fn.stdpath("data") .. "/haunt/test/"
+			vim.fn.mkdir(test_dir, "p")
+			test_file = test_dir .. "test_v2_load_" .. os.time() .. "_" .. math.random(1, 1000000) .. ".json"
+		end)
+
+		after_each(function()
+			vim.notify = original_notify
+			project_mock.restore()
+			if test_file and vim.fn.filereadable(test_file) == 1 then
+				vim.fn.delete(test_file)
+			end
+		end)
+
+		--- Hand-write a JSON file with arbitrary contents.
+		---@param path string
+		---@param data table
+		local function write_json(path, data)
+			vim.fn.writefile({ vim.json.encode(data) }, path)
+		end
+
+		it("resolves v2 relative paths to absolute on load", function()
+			project_mock.set({ root = "/fake/proj", branch = "main", project_id = "fake" })
+
+			-- Save with relative paths produced from in-project absolute paths.
+			local bookmarks = {
+				{ file = "/fake/proj/src/main.lua", line = 10, id = "id1", note = "First" },
+				{ file = "/fake/proj/lib/util.lua", line = 5, id = "id2" },
+			}
+			assert.is_true(persistence.save_bookmarks(bookmarks, test_file))
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.are.equal(2, #loaded)
+			assert.are.equal("/fake/proj/src/main.lua", loaded[1].file)
+			assert.are.equal(10, loaded[1].line)
+			assert.are.equal("First", loaded[1].note)
+			assert.are.equal("/fake/proj/lib/util.lua", loaded[2].file)
+			assert.are.equal(5, loaded[2].line)
+		end)
+
+		it("preserves absolute path and flag when bookmark is absolute=true", function()
+			project_mock.set({ root = "/fake/proj", branch = "main", project_id = "fake" })
+
+			local bookmarks = {
+				{ file = "/etc/hosts", line = 1, id = "abs1", absolute = true },
+			}
+			assert.is_true(persistence.save_bookmarks(bookmarks, test_file))
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.are.equal(1, #loaded)
+			assert.are.equal("/etc/hosts", loaded[1].file)
+			assert.is_true(loaded[1].absolute)
+		end)
+
+		it("rejects v1 storage with a notify and returns empty", function()
+			-- Hand-write a v1 file. load_bookmarks should refuse to load it
+			-- and direct the user to :HauntMigrate without crashing.
+			write_json(test_file, {
+				version = 1,
+				bookmarks = {
+					{ file = "/some/path/file.lua", line = 1, id = "v1id" },
+				},
+			})
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.is_table(loaded)
+			assert.are.equal(0, #loaded)
+
+			-- File must NOT be deleted by load_bookmarks.
+			assert.are.equal(1, vim.fn.filereadable(test_file))
+
+			local saw_v1_warning = false
+			for _, call in ipairs(notify_calls) do
+				if type(call.msg) == "string" and call.msg:match("v1 bookmark storage") and call.msg:match(":HauntMigrate") then
+					assert.are.equal(vim.log.levels.WARN, call.level)
+					saw_v1_warning = true
+				end
+			end
+			assert.is_true(saw_v1_warning)
+		end)
+
+		it("warns and returns empty when version field is missing", function()
+			write_json(test_file, {
+				bookmarks = {
+					{ file = "/some/path/file.lua", line = 1, id = "noversion" },
+				},
+			})
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.is_table(loaded)
+			assert.are.equal(0, #loaded)
+
+			local saw_missing_version = false
+			for _, call in ipairs(notify_calls) do
+				if type(call.msg) == "string" and call.msg:match("missing version field") then
+					assert.are.equal(vim.log.levels.WARN, call.level)
+					saw_missing_version = true
+				end
+			end
+			assert.is_true(saw_missing_version)
+		end)
+
+		it("warns when relative paths are loaded without a project root", function()
+			project_mock.set({ root = nil, branch = nil, project_id = "fallback" })
+
+			write_json(test_file, {
+				version = 2,
+				bookmarks = {
+					{ file = "src/main.lua", line = 10, id = "rel1" },
+				},
+			})
+
+			local loaded = persistence.load_bookmarks(test_file)
+			-- Bookmark survives the load (we don't crash) but file stays
+			-- as the stored relative string since we cannot resolve it.
+			assert.are.equal(1, #loaded)
+			assert.are.equal("src/main.lua", loaded[1].file)
+
+			local saw_no_root_warning = false
+			for _, call in ipairs(notify_calls) do
+				if type(call.msg) == "string" and call.msg:match("cannot resolve relative paths") then
+					assert.are.equal(vim.log.levels.WARN, call.level)
+					saw_no_root_warning = true
+				end
+			end
+			assert.is_true(saw_no_root_warning)
+		end)
+
+		it("rejects unsupported versions with an error", function()
+			write_json(test_file, {
+				version = 99,
+				bookmarks = {},
+			})
+
+			local loaded = persistence.load_bookmarks(test_file)
+			assert.is_table(loaded)
+			assert.are.equal(0, #loaded)
+
+			local saw_unsupported = false
+			for _, call in ipairs(notify_calls) do
+				if type(call.msg) == "string" and call.msg:match("unsupported version") then
+					assert.are.equal(vim.log.levels.ERROR, call.level)
+					saw_unsupported = true
+				end
+			end
+			assert.is_true(saw_unsupported)
 		end)
 	end)
 end)

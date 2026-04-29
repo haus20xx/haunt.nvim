@@ -351,6 +351,45 @@ function M.save_bookmarks_async(bookmarks, filepath, callback)
 	end)
 end
 
+--- Resolve v2 bookmarks: turn project-relative paths back into absolute paths.
+--- - bookmark.absolute == true: file is already absolute, pass through unchanged.
+--- - otherwise: resolve relative to the current project root via project.get_info().
+---   When no project root is available (not in a git repo), emit a single warning
+---   and leave bookmark.file as the stored relative string. The bookmark won't
+---   resolve to a real file but the load will not crash.
+---@param bookmarks table[] Raw bookmarks read from disk (v2 shape)
+---@return table[] resolved Bookmarks with absolute file paths in memory
+local function resolve_v2_bookmarks(bookmarks)
+	-- Lazy require to mirror the pattern in build_serializable and to avoid
+	-- potential circular dependencies at module-load time.
+	local utils = require("haunt.utils")
+	local project_root = require("haunt.project").get_info().root
+	local warned_no_root = false
+
+	for _, bookmark in ipairs(bookmarks) do
+		if bookmark.absolute == true then
+			goto continue
+		end
+
+		if not project_root then
+			if not warned_no_root then
+				warned_no_root = true
+				vim.notify(
+					"haunt.nvim: cannot resolve relative paths — not in a git repo",
+					vim.log.levels.WARN
+				)
+			end
+			goto continue
+		end
+
+		bookmark.file = utils.to_absolute(bookmark.file, project_root)
+
+		::continue::
+	end
+
+	return bookmarks
+end
+
 --- Load bookmarks from JSON file
 ---@param filepath? string Optional custom file path (defaults to git-based path)
 ---@return table bookmarks Array of bookmarks, or empty table if file doesn't exist or on error
@@ -397,19 +436,36 @@ function M.load_bookmarks(filepath)
 		return {}
 	end
 
-	-- Check version compatibility
-	if data.version ~= 1 then
-		vim.notify("haunt.nvim: load_bookmarks: unsupported version: " .. tostring(data.version), vim.log.levels.ERROR)
+	-- v1: storage predates project-relative paths. Reject with a migration
+	-- prompt and leave the file intact on disk for :HauntMigrate to upgrade.
+	if data.version == 1 then
+		vim.notify(
+			"haunt.nvim: v1 bookmark storage detected at "
+				.. storage_path
+				.. " — run :HauntMigrate to upgrade to v2",
+			vim.log.levels.WARN
+		)
 		return {}
 	end
 
-	-- Validate bookmarks field
-	if type(data.bookmarks) ~= "table" then
-		vim.notify("haunt.nvim: load_bookmarks: invalid bookmarks field (not a table)", vim.log.levels.ERROR)
-		return {}
+	-- v2: project-relative paths. Resolve back to absolute in memory.
+	if data.version == 2 then
+		if type(data.bookmarks) ~= "table" then
+			vim.notify(
+				"haunt.nvim: load_bookmarks: invalid bookmarks field (not a table)",
+				vim.log.levels.ERROR
+			)
+			return {}
+		end
+		return resolve_v2_bookmarks(data.bookmarks)
 	end
 
-	return data.bookmarks
+	-- Unsupported version
+	vim.notify(
+		"haunt.nvim: load_bookmarks: unsupported version: " .. tostring(data.version),
+		vim.log.levels.ERROR
+	)
+	return {}
 end
 
 --- Generate a unique bookmark ID
