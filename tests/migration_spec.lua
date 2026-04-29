@@ -62,6 +62,21 @@ describe("haunt.migration", function()
 		return nil
 	end
 
+	--- Return the 1-based index of the first captured notification whose
+	--- message contains `needle`, or nil if none found. Used to assert
+	--- ordering of notifies (e.g. "starting migration" must precede
+	--- "migration successful").
+	---@param needle string
+	---@return integer|nil index
+	local function index_of_notification(needle)
+		for i, n in ipairs(notifications) do
+			if type(n.msg) == "string" and n.msg:find(needle, 1, true) then
+				return i
+			end
+		end
+		return nil
+	end
+
 	before_each(function()
 		helpers.reset_modules()
 		package.loaded["haunt.migration"] = nil
@@ -138,7 +153,24 @@ describe("haunt.migration", function()
 		assert.are.equal(0, vim.fn.filereadable(old_path))
 		assert.are.equal(1, vim.fn.filereadable(old_path .. ".v1.bak"))
 
-		assert.is_not_nil(find_notification("migrated 2 bookmarks"))
+		-- Both the start and success notifies must fire, in order, and the
+		-- success notify must reference the backup path.
+		local start = find_notification("starting migration")
+		assert.is_not_nil(start)
+		assert.are.equal(vim.log.levels.INFO, start.level)
+		assert.is_not_nil(start.msg:find(old_path .. ".v1.bak", 1, true))
+
+		local success = find_notification("migration successful")
+		assert.is_not_nil(success)
+		assert.are.equal(vim.log.levels.INFO, success.level)
+		assert.is_not_nil(success.msg:find("2 bookmarks", 1, true))
+		assert.is_not_nil(success.msg:find(old_path .. ".v1.bak", 1, true))
+
+		local start_idx = index_of_notification("starting migration")
+		local success_idx = index_of_notification("migration successful")
+		assert.is_not_nil(start_idx)
+		assert.is_not_nil(success_idx)
+		assert.is_true(start_idx < success_idx)
 	end)
 
 	it("preserves out-of-project bookmarks with absolute=true", function()
@@ -204,6 +236,12 @@ describe("haunt.migration", function()
 		local refusal = find_notification("refusing to overwrite")
 		assert.is_not_nil(refusal)
 		assert.are.equal(vim.log.levels.ERROR, refusal.level)
+
+		-- We aborted before announcing migration — the start notify must
+		-- NOT have fired (otherwise users see a misleading "starting
+		-- migration" followed immediately by an error).
+		assert.is_nil(find_notification("starting migration"))
+		assert.is_nil(find_notification("migration successful"))
 	end)
 
 	it("is a no-op (info-level) when no v1 file exists at old path", function()
@@ -223,6 +261,10 @@ describe("haunt.migration", function()
 		local n = find_notification("no v1 file found")
 		assert.is_not_nil(n)
 		assert.are.equal(vim.log.levels.INFO, n.level)
+
+		-- Bailed out before the migration body — no start/success notifies.
+		assert.is_nil(find_notification("starting migration"))
+		assert.is_nil(find_notification("migration successful"))
 	end)
 
 	it("aborts when file at old path is not version=1", function()
@@ -302,5 +344,179 @@ describe("haunt.migration", function()
 		assert.are.equal("kept", data.bookmarks[1].note)
 		assert.is_nil(data.bookmarks[1].extmark_id)
 		assert.is_nil(data.bookmarks[1].annotation_extmark_id)
+	end)
+
+	it("calls api.reload after a successful migration", function()
+		local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+
+		write_json(old_path, {
+			version = 1,
+			bookmarks = {
+				{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+			},
+		})
+
+		-- Replace api.reload with a counter so we can assert it was invoked
+		-- exactly once after the success notify. Restore on teardown.
+		local api = require("haunt.api")
+		local original_reload = api.reload
+		local reload_calls = 0
+		api.reload = function()
+			reload_calls = reload_calls + 1
+			return true
+		end
+
+		local ok, err = pcall(migration.migrate_current_project)
+
+		api.reload = original_reload
+
+		assert.is_true(ok, "migrate_current_project raised: " .. tostring(err))
+		assert.are.equal(1, reload_calls)
+		-- Sanity: success notify was emitted (so reload happened in the
+		-- success path, not the error path).
+		local success = find_notification("migration successful")
+		assert.is_not_nil(success)
+		assert.is_not_nil(success.msg:find("1 bookmarks", 1, true))
+	end)
+
+	describe("notify_if_pending_v1", function()
+		before_each(function()
+			-- Each notify_if_pending_v1 test starts with a clean session
+			-- table so the once-per-session guard doesn't leak state.
+			migration._reset_for_testing()
+		end)
+
+		it("returns true and notifies once when v1 file exists at old path", function()
+			local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+			local new_path = persistence.get_storage_path()
+
+			assert.are_not.equal(old_path, new_path)
+
+			write_json(old_path, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+
+			local pending = migration.notify_if_pending_v1()
+			assert.is_true(pending)
+
+			local n = find_notification("v1 bookmark storage detected")
+			assert.is_not_nil(n)
+			assert.are.equal(vim.log.levels.WARN, n.level)
+			assert.is_not_nil(n.msg:find(old_path, 1, true))
+			assert.is_not_nil(n.msg:find(":HauntMigrate", 1, true))
+		end)
+
+		it("does not re-notify on a second call in the same session", function()
+			local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+			write_json(old_path, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+
+			-- First call: notifies.
+			assert.is_true(migration.notify_if_pending_v1())
+			assert.is_not_nil(find_notification("v1 bookmark storage detected"))
+
+			-- Clear capture; second call should still report pending=true
+			-- but emit no new notify.
+			notifications = {}
+			assert.is_true(migration.notify_if_pending_v1())
+			assert.is_nil(find_notification("v1 bookmark storage detected"))
+		end)
+
+		it("re-notifies after _reset_for_testing", function()
+			local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+			write_json(old_path, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+
+			migration.notify_if_pending_v1()
+			notifications = {}
+			-- Without reset, this would be a no-op notify.
+			migration._reset_for_testing()
+
+			assert.is_true(migration.notify_if_pending_v1())
+			assert.is_not_nil(find_notification("v1 bookmark storage detected"))
+		end)
+
+		it("returns false when a v2 file already exists at the new path", function()
+			local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+			local new_path = persistence.get_storage_path()
+
+			write_json(old_path, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+			write_json(new_path, {
+				version = 2,
+				bookmarks = {
+					{ file = "src/main.lua", line = 10, id = "v2id" },
+				},
+			})
+
+			assert.is_false(migration.notify_if_pending_v1())
+			assert.is_nil(find_notification("v1 bookmark storage detected"))
+		end)
+
+		it("returns false when no v1 file exists at the old path", function()
+			-- Don't seed any old file.
+			assert.is_false(migration.notify_if_pending_v1())
+			assert.is_nil(find_notification("v1 bookmark storage detected"))
+		end)
+
+		it("returns false when old_path == new_path", function()
+			-- Force the new storage path to equal what compute_old_path
+			-- would produce for this project. This simulates project_id
+			-- having fallen back to the repo path.
+			local old_path = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+
+			-- Seed a v1 file at that path so any path-only check would
+			-- still see something on disk.
+			write_json(old_path, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+
+			local original_get_storage_path = persistence.get_storage_path
+			persistence.get_storage_path = function()
+				return old_path
+			end
+
+			local pending = migration.notify_if_pending_v1()
+
+			persistence.get_storage_path = original_get_storage_path
+
+			assert.is_false(pending)
+			assert.is_nil(find_notification("v1 bookmark storage detected"))
+		end)
+
+		it("returns false when not in a git repo", function()
+			-- Seed a hypothetical v1 file so we know the false return is
+			-- driven by the project_root nil check, not by absence of a file.
+			local hypothetical_old = v1_path_for(fake_project_root, fake_branch, fake_data_dir, true)
+			write_json(hypothetical_old, {
+				version = 1,
+				bookmarks = {
+					{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+				},
+			})
+
+			project_mock.set({ root = nil, branch = nil, project_id = "fallback" })
+
+			assert.is_false(migration.notify_if_pending_v1())
+			assert.is_nil(find_notification("v1 bookmark storage detected"))
+		end)
 	end)
 end)

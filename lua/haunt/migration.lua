@@ -21,11 +21,21 @@
 
 ---@class MigrationModule
 ---@field migrate_current_project fun()
+---@field notify_if_pending_v1 fun(): boolean
+---@field _reset_for_testing fun()
 
 ---@private
 ---@type MigrationModule
 ---@diagnostic disable-next-line: missing-fields
 local M = {}
+
+--- Session-scoped tracker for one-time notifications about pending v1 files.
+--- Keyed by the absolute old_path of the v1 file. We notify at most once per
+--- old_path per Neovim session to avoid drowning the user in WARN noise on
+--- every UIEnter / autocmd cycle.
+---@private
+---@type table<string, boolean>
+local _v1_notified = {}
 
 --- Compute the OLD (v1) storage path for the current project.
 ---
@@ -166,19 +176,13 @@ function M.migrate_current_project()
 
 	local data, err = read_json_file(old_path)
 	if not data then
-		vim.notify(
-			"haunt.nvim: failed to parse v1 file at " .. old_path .. ": " .. tostring(err),
-			vim.log.levels.ERROR
-		)
+		vim.notify("haunt.nvim: failed to parse v1 file at " .. old_path .. ": " .. tostring(err), vim.log.levels.ERROR)
 		return
 	end
 
 	if data.version ~= 1 then
 		vim.notify(
-			"haunt.nvim: refusing to migrate file at "
-				.. old_path
-				.. ": expected version=1, got "
-				.. tostring(data.version),
+			"haunt.nvim: refusing to migrate file at " .. old_path .. ": expected version=1, got " .. tostring(data.version),
 			vim.log.levels.ERROR
 		)
 		return
@@ -193,12 +197,22 @@ function M.migrate_current_project()
 	end
 
 	if vim.fn.filereadable(new_path) == 1 then
-		vim.notify(
-			"haunt.nvim: v2 file already exists at " .. new_path .. ", refusing to overwrite",
-			vim.log.levels.ERROR
-		)
+		vim.notify("haunt.nvim: v2 file already exists at " .. new_path .. ", refusing to overwrite", vim.log.levels.ERROR)
 		return
 	end
+
+	-- All validation gates passed — we are now actually going to migrate.
+	-- Compute the backup path once here so we can reference it in both the
+	-- starting notify and the success notify (and in the rename block).
+	local backup_path = old_path .. ".v1.bak"
+
+	vim.notify(
+		string.format(
+			"haunt.nvim: starting migration. Backup will be saved to %s if you need to roll back.",
+			backup_path
+		),
+		vim.log.levels.INFO
+	)
 
 	local transformed, relative_count, absolute_count = transform_bookmarks(data.bookmarks, info.root)
 
@@ -222,7 +236,7 @@ function M.migrate_current_project()
 
 	-- Rename the old file to <old>.v1.bak rather than deleting it.
 	-- If the rename fails, log a warning but leave the old file alone.
-	local backup_path = old_path .. ".v1.bak"
+	-- backup_path was computed above, just before the starting notify.
 	local rename_ok, rename_err = pcall(function()
 		return vim.uv.fs_rename(old_path, backup_path)
 	end)
@@ -231,9 +245,7 @@ function M.migrate_current_project()
 		local os_ok, os_ret = pcall(os.rename, old_path, backup_path)
 		if not os_ok or os_ret ~= true then
 			vim.notify(
-				"haunt.nvim: migrated to v2 but failed to rename old file to "
-					.. backup_path
-					.. " (left in place)",
+				"haunt.nvim: migrated to v2 but failed to rename old file to " .. backup_path .. " (left in place)",
 				vim.log.levels.WARN
 			)
 		end
@@ -242,13 +254,97 @@ function M.migrate_current_project()
 	local total = relative_count + absolute_count
 	vim.notify(
 		string.format(
-			"haunt.nvim: migrated %d bookmarks to v2 (%d relative, %d absolute)",
+			"haunt.nvim: migration successful — %d bookmarks (%d relative, %d absolute). Backup at %s.",
 			total,
 			relative_count,
-			absolute_count
+			absolute_count,
+			backup_path
 		),
 		vim.log.levels.INFO
 	)
+
+	-- Refresh in-memory store and on-buffer visuals so the user doesn't
+	-- have to restart Neovim to see migrated bookmarks. Lazy-required to
+	-- match the convention used elsewhere in this module.
+	require("haunt.api").reload()
+end
+
+--- Detect whether the current project has a v1 bookmark file at the old
+--- storage path that needs migrating, and emit a one-time-per-session WARN
+--- notify if so.
+---
+--- Idempotent within a session: subsequent calls for the same old_path
+--- return `true` (a v1 file is still pending) but do NOT re-emit a notify.
+--- Tests that need to exercise the notify path multiple times can call
+--- `M._reset_for_testing()` to clear the seen set.
+---
+--- The function is conservative: it returns `false` (no notify) in any of
+--- these cases:
+---   - Not in a git repo (project_root is nil).
+---   - The old and new keying paths are identical (project_id has fallen
+---     back to the repo path, so there's nothing to migrate).
+---   - A v2 file already exists at the new path (already migrated).
+---   - There is no file at the old path.
+---   - The file at old_path is unreadable or not actually `version=1`.
+---
+---@return boolean pending True if a pending v1 file was detected this session
+function M.notify_if_pending_v1()
+	local persistence = require("haunt.persistence")
+	local config = require("haunt.config").get()
+
+	local info = require("haunt.project").get_info()
+	if not info.root then
+		return false
+	end
+
+	local data_dir = persistence.ensure_data_dir()
+	local per_branch = config.per_branch_bookmarks ~= false
+
+	local old_path = compute_old_path(info.root, info.branch, data_dir, per_branch)
+	local new_path = persistence.get_storage_path()
+
+	-- Same path means project_id fell back to repo path — nothing to migrate.
+	if old_path == new_path then
+		return false
+	end
+
+	-- Already migrated: a v2 file is sitting at the new path.
+	if vim.fn.filereadable(new_path) == 1 then
+		return false
+	end
+
+	-- No v1 file at the old path.
+	if vim.fn.filereadable(old_path) ~= 1 then
+		return false
+	end
+
+	-- Decode and confirm it really is version=1.
+	local data, _ = read_json_file(old_path)
+	if not data or data.version ~= 1 then
+		return false
+	end
+
+	-- Already notified this session for this old_path.
+	if _v1_notified[old_path] then
+		return true
+	end
+	_v1_notified[old_path] = true
+
+	vim.notify(
+		"haunt.nvim: v1 bookmark storage detected at:\n" .. old_path .. "\n\n" .. "Run :HauntMigrate to upgrade to v2",
+		vim.log.levels.WARN
+	)
+	return true
+end
+
+--- Reset session-scoped state for tests.
+---
+--- Clears the table tracking which old_paths have already been notified
+--- about, so tests can assert the "notify only once" behavior across
+--- multiple invocations.
+---@private
+function M._reset_for_testing()
+	_v1_notified = {}
 end
 
 return M

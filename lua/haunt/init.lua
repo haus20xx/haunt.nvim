@@ -197,6 +197,12 @@ function M._setup_restoration_autocmd()
 			api.restore_buffer_bookmarks(bufnr)
 		end
 	end
+
+	-- Surface a one-time notify if the current project has a v1 file
+	-- pending migration. The storage filename keying changed, so v1 files
+	-- sit at a path the new code path never looks at — without this the
+	-- user sees "no bookmarks" silently.
+	require("haunt.migration").notify_if_pending_v1()
 end
 
 -- Check if any bookmarks exist
