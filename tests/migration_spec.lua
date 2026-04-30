@@ -33,6 +33,20 @@ describe("haunt.migration", function()
 		return data_dir .. vim.fn.sha256(key):sub(1, 12) .. ".json"
 	end
 
+	--- Compute the v2 path the same way persistence.get_storage_path does internally.
+	---@param project_id string
+	---@param branch string|nil
+	---@param data_dir string
+	---@param per_branch boolean
+	local function v2_path_for(project_id, branch, data_dir, per_branch)
+		if not per_branch then
+			return data_dir .. vim.fn.sha256(project_id):sub(1, 12) .. ".json"
+		end
+		local b = branch or "__default__"
+		local key = project_id .. "|" .. b
+		return data_dir .. vim.fn.sha256(key):sub(1, 12) .. ".json"
+	end
+
 	--- Write a JSON file as the given table.
 	---@param path string
 	---@param tbl table
@@ -531,6 +545,87 @@ describe("haunt.migration", function()
 			-- Old file remains untouched.
 			assert.are.equal(1, vim.fn.filereadable(hypothetical_old))
 			assert.are.equal(0, vim.fn.filereadable(hypothetical_old .. ".v1.bak"))
+		end)
+
+		describe("haunt.setup() integration", function()
+			local custom_data_dir
+			local v1_path
+			local v2_path
+
+			before_each(function()
+				-- Restore the real ensure_data_dir so set_data_dir drives the
+				-- path; the outer before_each pins it to fake_data_dir.
+				persistence.ensure_data_dir = original_ensure_data_dir
+
+				custom_data_dir = vim.fn.tempname() .. "_haunt_setup/"
+				vim.fn.mkdir(custom_data_dir, "p")
+				v1_path = v1_path_for(fake_project_root, fake_branch, custom_data_dir, true)
+				v2_path = v2_path_for(fake_project_id, fake_branch, custom_data_dir, true)
+
+				write_json(v1_path, {
+					version = 1,
+					bookmarks = {
+						{ file = "/fake/proj/src/main.lua", line = 10, id = "id1" },
+					},
+				})
+			end)
+
+			after_each(function()
+				persistence.set_data_dir(nil)
+				if custom_data_dir and vim.fn.isdirectory(custom_data_dir) == 1 then
+					vim.fn.delete(custom_data_dir, "rf")
+				end
+			end)
+
+			it("runs synchronously from haunt.setup() at the configured data_dir", function()
+				assert.are_not.equal(v1_path, v2_path)
+
+				require("haunt").setup({
+					data_dir = custom_data_dir,
+					per_branch_bookmarks = true,
+				})
+
+				-- setup() must finish migration before returning — no
+				-- vim.schedule, no UIEnter, no waiting.
+				assert.are.equal(0, vim.fn.filereadable(v1_path))
+				assert.are.equal(1, vim.fn.filereadable(v1_path .. ".v1.bak"))
+				assert.are.equal(1, vim.fn.filereadable(v2_path))
+
+				local data = read_json(v2_path)
+				assert.are.equal(2, data.version)
+				assert.are.equal(1, #data.bookmarks)
+				assert.are.equal("src/main.lua", data.bookmarks[1].file)
+
+				-- The "v1 bookmark storage detected — run :HauntMigrate" warning
+				-- in persistence.load_bookmarks must not fire on the post-setup()
+				-- path: setup() migrates first, so any later store.load reads v2.
+				assert.is_nil(find_notification("v1 bookmark storage detected"))
+			end)
+
+			it("is idempotent across the setup() and UIEnter-fallback paths", function()
+				require("haunt").setup({
+					data_dir = custom_data_dir,
+					per_branch_bookmarks = true,
+				})
+
+				assert.are.equal(1, vim.fn.filereadable(v1_path .. ".v1.bak"))
+				assert.are.equal(1, vim.fn.filereadable(v2_path))
+				assert.is_not_nil(find_notification("migration successful"))
+
+				local v2_mtime_before = vim.fn.getftime(v2_path)
+				local v2_data_before = read_json(v2_path)
+				local notifications_after_setup = #notifications
+
+				-- Second auto_migrate must early-return: no new notifies, no
+				-- rewrite of v2, no resurrection of v1.
+				migration.auto_migrate()
+
+				assert.are.equal(notifications_after_setup, #notifications)
+				assert.are.equal(0, vim.fn.filereadable(v1_path))
+				assert.are.equal(1, vim.fn.filereadable(v1_path .. ".v1.bak"))
+				assert.are.equal(v2_mtime_before, vim.fn.getftime(v2_path))
+				assert.are.same(v2_data_before, read_json(v2_path))
+			end)
 		end)
 
 		it("is silent when old_path == new_path", function()

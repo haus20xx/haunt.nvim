@@ -297,6 +297,9 @@ function M.setup(opts)
 	if user_config.data_dir then
 		require("haunt.persistence").set_data_dir(user_config.data_dir)
 	end
+
+	-- Run inline so the user's data_dir is applied before migration probes for files.
+	require("haunt.migration").auto_migrate()
 end
 
 --- Get the current configuration.
