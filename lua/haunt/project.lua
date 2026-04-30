@@ -18,6 +18,7 @@
 ---@field get_info fun(): ProjectInfo
 ---@field invalidate fun()
 ---@field setup_autocmds fun()
+---@field handle_dir_change fun(scope?: string)
 
 ---@private
 ---@type ProjectModule
@@ -140,21 +141,80 @@ function M.invalidate()
 	_cache_cwd = nil
 end
 
+--- Handle a cwd change. On a global `:cd` that crosses a project boundary,
+--- flush the previous project's bookmarks to *its* storage file and reload
+--- the in-memory store for the new project. Window-/tab-local cd (`:lcd`,
+--- `:tcd`) is treated as transient and never swaps the store.
+---
+--- The cache is invalidated first so the project_id comparison reads fresh
+--- info; the save itself uses the store's stamped context, not the cache,
+--- so it correctly targets the *previous* project even though cwd is
+--- already pointing at the new one.
+---@param scope? string The DirChanged scope ("global", "window", "tabpage").
+--- Defaults to "global" for callers that don't have a scope (focus events,
+--- explicit invalidation requests).
+function M.handle_dir_change(scope)
+	scope = scope or "global"
+
+	if scope ~= "global" then
+		M.invalidate()
+		return
+	end
+
+	local store = require("haunt.store")
+	local stamped_id = store.get_loaded_project_id()
+	if stamped_id == nil then
+		M.invalidate()
+		return
+	end
+
+	-- Cheap short-circuit: if cwd is still under the stamped project root,
+	-- this is a subdir cd within the same project. Skip the cache-invalidate
+	-- + 3 git shell-outs that `get_info()` would otherwise do.
+	local cwd = vim.fn.getcwd()
+	local stamped_root = store.get_loaded_project_root()
+	if stamped_root and (cwd == stamped_root or vim.startswith(cwd, stamped_root .. "/")) then
+		return
+	end
+
+	M.invalidate()
+
+	local current_id = M.get_info().project_id
+	if current_id == stamped_id then
+		return
+	end
+
+	if store.has_bookmarks() then
+		store.save()
+	end
+
+	require("haunt.api").reload()
+end
+
 --- Register autocmds that invalidate the project info cache when the user
 --- could plausibly have changed cwd, branch, or git state:
 ---   - `DirChanged`: `:cd`, `:lcd`, `:tcd` from inside Neovim.
+---     Global `:cd` across projects also triggers a save+reload so the
+---     in-memory store follows the cwd into the new project.
 ---   - `FocusGained`: alt-tabbed to an external terminal/git tool and back.
 ---   - `VimResume`: Ctrl+Z to a shell, did something, then `fg`'d back.
 ---
 --- Idempotent — safe to call multiple times (clears the augroup first).
 function M.setup_autocmds()
 	local augroup = vim.api.nvim_create_augroup("haunt_project_cache", { clear = true })
-	vim.api.nvim_create_autocmd({ "DirChanged", "FocusGained", "VimResume" }, {
+	vim.api.nvim_create_autocmd("DirChanged", {
+		group = augroup,
+		callback = function()
+			M.handle_dir_change(vim.v.event.scope)
+		end,
+		desc = "Save+reload haunt store on cross-project :cd; invalidate cache otherwise",
+	})
+	vim.api.nvim_create_autocmd({ "FocusGained", "VimResume" }, {
 		group = augroup,
 		callback = function()
 			M.invalidate()
 		end,
-		desc = "Invalidate haunt project cache when cwd/branch may have changed",
+		desc = "Invalidate haunt project cache on focus/resume",
 	})
 end
 

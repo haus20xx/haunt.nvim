@@ -15,6 +15,8 @@
 ---@field clear_file_bookmarks fun(filepath: string): Bookmark[]
 ---@field clear_all_bookmarks fun(): number
 ---@field get_all_raw fun(): Bookmark[]
+---@field get_loaded_project_id fun(): string|nil
+---@field get_loaded_project_root fun(): string|nil
 ---@field _reset_for_testing fun()
 
 ---@type StoreModule
@@ -44,6 +46,25 @@ local bookmarks_by_file = {}
 ---@private
 ---@type boolean
 local _loaded = false
+
+---@private
+--- The project_id the in-memory bookmarks belong to. Set on load/reload.
+--- Used by `haunt.project.handle_dir_change` to detect cross-project cd.
+---@type string|nil
+local _loaded_project_id = nil
+
+---@private
+--- The project root the in-memory bookmarks were serialized against, captured
+--- at load time. Saves always use this root (not the cache's current value)
+--- so a `:cd` into a different project doesn't corrupt the relative paths.
+---@type string|nil
+local _loaded_project_root = nil
+
+---@private
+--- The storage path the in-memory bookmarks were loaded from. Saves always
+--- write here, regardless of where the project cache would resolve "now".
+---@type string|nil
+local _loaded_storage_path = nil
 
 ---@private
 ---@type PersistenceModule|nil
@@ -288,6 +309,11 @@ function M.load()
 	end
 	_loaded = true
 
+	local info = require("haunt.project").get_info()
+	_loaded_project_id = info.project_id
+	_loaded_project_root = info.root
+	_loaded_storage_path = persistence.get_storage_path()
+
 	return true
 end
 
@@ -299,20 +325,24 @@ function M.reload()
 	bookmarks = {}
 	bookmarks_by_file = {}
 	_loaded = false
+	_loaded_project_id = nil
+	_loaded_project_root = nil
+	_loaded_storage_path = nil
 	M.load()
 end
 
 --- Save bookmarks to persistent storage.
 ---
 --- Bookmarks are auto-saved on text changes (debounced) and Neovim exit,
---- but you can call this manually to force a save.
+--- but you can call this manually to force a save. Always writes to the
+--- stamped storage path/root, not the project cache's current values, so
+--- a `:cd` into a different project doesn't redirect saves mid-flight.
 ---
 ---@return boolean success True if save succeeded
 function M.save()
 	ensure_persistence()
 	---@cast persistence -nil
-	local success = persistence.save_bookmarks(bookmarks)
-	return success
+	return persistence.save_bookmarks(bookmarks, _loaded_storage_path, _loaded_project_root)
 end
 
 --- Save bookmarks to persistent storage asynchronously.
@@ -324,7 +354,21 @@ end
 function M.save_async(callback)
 	ensure_persistence()
 	---@cast persistence -nil
-	persistence.save_bookmarks_async(bookmarks, nil, callback)
+	persistence.save_bookmarks_async(bookmarks, _loaded_storage_path, callback, _loaded_project_root)
+end
+
+--- The project_id stamped onto the in-memory store. Used by the dir-change
+--- handler to detect when the user has cd'd into a different project.
+---@return string|nil
+function M.get_loaded_project_id()
+	return _loaded_project_id
+end
+
+--- The project root stamped onto the in-memory store. Used by the dir-change
+--- handler to short-circuit when cwd is still under this root.
+---@return string|nil
+function M.get_loaded_project_root()
+	return _loaded_project_root
 end
 
 --- Add a bookmark to the store
@@ -409,6 +453,9 @@ function M._reset_for_testing()
 	bookmarks = {}
 	bookmarks_by_file = {}
 	_loaded = true -- Prevent auto-loading from disk
+	_loaded_project_id = nil
+	_loaded_project_root = nil
+	_loaded_storage_path = nil
 end
 
 return M

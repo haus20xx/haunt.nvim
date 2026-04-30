@@ -25,8 +25,8 @@
 ---@field get_git_info fun(): {root: string|nil, branch: string|nil}
 ---@field get_storage_path fun(): string
 ---@field _get_v1_storage_path fun(repo_root: string, branch: string|nil, per_branch: boolean|nil): string
----@field save_bookmarks fun(bookmarks: Bookmark[], filepath?: string): boolean
----@field save_bookmarks_async fun(bookmarks: Bookmark[], filepath?: string, callback?: fun(success: boolean))
+---@field save_bookmarks fun(bookmarks: Bookmark[], filepath?: string, project_root?: string|nil): boolean
+---@field save_bookmarks_async fun(bookmarks: Bookmark[], filepath?: string, callback?: fun(success: boolean), project_root?: string|nil)
 ---@field load_bookmarks fun(filepath?: string): Bookmark[]|nil
 ---@field create_bookmark fun(file: string, line: number, note?: string): Bookmark|nil, string|nil
 ---@field is_valid_bookmark fun(bookmark: table): boolean
@@ -167,9 +167,12 @@ end
 --- Shared by sync and async save paths.
 ---@param bookmarks table
 ---@param filepath? string
+---@param project_root? string|nil Override project root for serialization (callers
+--- with a stamped origin pass it here so the save reflects the project the
+--- bookmarks belong to, not whatever the cache currently resolves to).
 ---@return {storage_path: string, json_str: string}|nil payload
 ---@return string|nil err
-local function build_save_payload(bookmarks, filepath)
+local function build_save_payload(bookmarks, filepath, project_root)
 	if type(bookmarks) ~= "table" then
 		return nil, "bookmarks must be a table"
 	end
@@ -183,7 +186,7 @@ local function build_save_payload(bookmarks, filepath)
 
 	local data = {
 		version = STORAGE_VERSION,
-		bookmarks = M._build_serializable(bookmarks),
+		bookmarks = M._build_serializable(bookmarks, project_root),
 	}
 
 	local ok, json_str = pcall(vim.json.encode, data)
@@ -197,8 +200,9 @@ end
 --- Save bookmarks to JSON file
 ---@param bookmarks table Array of bookmark tables to save
 ---@param filepath? string Optional custom file path (defaults to git-based path)
+---@param project_root? string|nil Optional project root for serialization
 ---@return boolean success True if save was successful, false otherwise
-function M.save_bookmarks(bookmarks, filepath)
+function M.save_bookmarks(bookmarks, filepath, project_root)
 	if type(bookmarks) == "table" and #bookmarks == 0 then
 		local storage_path = filepath or M.get_storage_path()
 		if storage_path then
@@ -207,7 +211,7 @@ function M.save_bookmarks(bookmarks, filepath)
 		return true
 	end
 
-	local payload, err = build_save_payload(bookmarks, filepath)
+	local payload, err = build_save_payload(bookmarks, filepath, project_root)
 	if not payload then
 		vim.notify("haunt.nvim: save_bookmarks: " .. err, vim.log.levels.ERROR)
 		return false
@@ -227,7 +231,8 @@ end
 ---@param bookmarks table Array of bookmark tables to save
 ---@param filepath? string Optional custom file path (defaults to git-based path)
 ---@param callback? fun(success: boolean) Optional callback called when write completes
-function M.save_bookmarks_async(bookmarks, filepath, callback)
+---@param project_root? string|nil Optional project root for serialization
+function M.save_bookmarks_async(bookmarks, filepath, callback, project_root)
 	if type(bookmarks) == "table" and #bookmarks == 0 then
 		local storage_path = filepath or M.get_storage_path()
 		if storage_path then
@@ -239,7 +244,7 @@ function M.save_bookmarks_async(bookmarks, filepath, callback)
 		return
 	end
 
-	local payload = build_save_payload(bookmarks, filepath)
+	local payload = build_save_payload(bookmarks, filepath, project_root)
 	if not payload then
 		if callback then
 			callback(false)

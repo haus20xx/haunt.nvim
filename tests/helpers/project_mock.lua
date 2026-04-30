@@ -2,8 +2,11 @@
 ---
 --- haunt.project caches `{root, branch, project_id}` and exposes only
 --- `get_info()` to production code. Tests need to control those values
---- without a real git repository, so this module pokes the cache via the
---- module's documented test-only seam (`project._test_set_info`).
+--- without a real git repository.
+---
+--- Strategy: replace `get_info` itself with a function that returns the
+--- mocked info. This survives `M.invalidate()` calls from production code
+--- (e.g. the cd-handling autocmd flow), which a cache-only mock would not.
 ---
 --- Usage:
 ---     local project_mock = require("tests.helpers.project_mock")
@@ -19,14 +22,28 @@
 
 local M = {}
 
+---@type fun(): ProjectInfo|nil
+local _original_get_info = nil
+
 ---@param info ProjectInfo
 function M.set(info)
-	require("haunt.project")._test_set_info(info)
+	local project = require("haunt.project")
+	if _original_get_info == nil then
+		_original_get_info = project.get_info
+	end
+	project.get_info = function()
+		return info
+	end
 end
 
---- Drop the injected info; the next `get_info` call will shell out to git.
+--- Drop the injected info; restore the real `get_info` and clear the cache.
 function M.restore()
-	require("haunt.project").invalidate()
+	local project = require("haunt.project")
+	if _original_get_info ~= nil then
+		project.get_info = _original_get_info
+		_original_get_info = nil
+	end
+	project.invalidate()
 end
 
 --- Run `fn` with the given project info injected, restoring on exit.
