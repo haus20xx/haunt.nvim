@@ -46,7 +46,13 @@ describe("cross-project cd handling", function()
 			store.reload()
 			local path_a = persistence.get_storage_path()
 
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 10, id = "/proj-a/file.lua:10", note = "from project A", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 10,
+				id = "/proj-a/file.lua:10",
+				note = "from project A",
+				absolute = true,
+			})
 
 			project_mock.set({ root = "/proj-b", branch = "main", project_id = "proj-b-id" })
 			project.handle_dir_change("global")
@@ -60,7 +66,13 @@ describe("cross-project cd handling", function()
 		it("swaps the in-memory store to the new project", function()
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
 			store.reload()
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 10, id = "/proj-a/file.lua:10", note = "from project A", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 10,
+				id = "/proj-a/file.lua:10",
+				note = "from project A",
+				absolute = true,
+			})
 
 			project_mock.set({ root = "/proj-b", branch = "main", project_id = "proj-b-id" })
 			project.handle_dir_change("global")
@@ -97,7 +109,13 @@ describe("cross-project cd handling", function()
 			local path_b = persistence.get_storage_path()
 			project.handle_dir_change("global")
 
-			store.add_bookmark({ file = "/proj-b/file.lua", line = 3, id = "/proj-b/file.lua:3", note = "in B now", absolute = true })
+			store.add_bookmark({
+				file = "/proj-b/file.lua",
+				line = 3,
+				id = "/proj-b/file.lua:3",
+				note = "in B now",
+				absolute = true,
+			})
 			store.save()
 
 			local saved_b = read_storage(path_b)
@@ -120,7 +138,13 @@ describe("cross-project cd handling", function()
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
 			store.reload()
 			local path_a = persistence.get_storage_path()
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 1, id = "/proj-a/file.lua:1", note = "from project A", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 1,
+				id = "/proj-a/file.lua:1",
+				note = "from project A",
+				absolute = true,
+			})
 
 			project_mock.set({ root = nil, branch = nil, project_id = "/home/user/Downloads" })
 			project.handle_dir_change("global")
@@ -138,7 +162,13 @@ describe("cross-project cd handling", function()
 		it("does NOT swap the store on window-local cd", function()
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
 			store.reload()
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 1, id = "/proj-a/file.lua:1", note = "from project A", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 1,
+				id = "/proj-a/file.lua:1",
+				note = "from project A",
+				absolute = true,
+			})
 
 			project_mock.set({ root = "/proj-b", branch = "main", project_id = "proj-b-id" })
 			project.handle_dir_change("window")
@@ -151,7 +181,13 @@ describe("cross-project cd handling", function()
 		it("does NOT swap the store on tab-local cd", function()
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
 			store.reload()
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 1, id = "/proj-a/file.lua:1", note = "from project A", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 1,
+				id = "/proj-a/file.lua:1",
+				note = "from project A",
+				absolute = true,
+			})
 
 			project_mock.set({ root = "/proj-b", branch = "main", project_id = "proj-b-id" })
 			project.handle_dir_change("tabpage")
@@ -165,7 +201,13 @@ describe("cross-project cd handling", function()
 		it("is a no-op (cd into a subdir does not churn the store)", function()
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
 			store.reload()
-			store.add_bookmark({ file = "/proj-a/file.lua", line = 1, id = "/proj-a/file.lua:1", note = "stable bookmark", absolute = true })
+			store.add_bookmark({
+				file = "/proj-a/file.lua",
+				line = 1,
+				id = "/proj-a/file.lua:1",
+				note = "stable bookmark",
+				absolute = true,
+			})
 
 			-- Same project_id (cd into ~/proj-a/frontend resolves to same toplevel).
 			project_mock.set({ root = "/proj-a", branch = "main", project_id = "proj-a-id" })
