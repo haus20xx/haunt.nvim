@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.0.0](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.8.1...v1.0.0) (2026-05-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **persistence:** existing v1 bookmark files no longer load directly; users must run :HauntMigrate to upgrade them to v2.
+* **persistence:** 
+* **persistence:** 
+
+### Features
+
+* **api:** add reload() helper for in-memory refresh from disk ([fc77bf1](https://github.com/TheNoeTrevino/haunt.nvim/commit/fc77bf1aade3da4725dcbec3f1a92f05e3acae4e))
+* **api:** flag out-of-project bookmarks as absolute ([8487c50](https://github.com/TheNoeTrevino/haunt.nvim/commit/8487c50cdf17bb3ed3066575191bd97741d9429b))
+* atmoic writes for bookmarks ([cd8967d](https://github.com/TheNoeTrevino/haunt.nvim/commit/cd8967db4a20895730d5d19cc07aab180b5b16b6))
+* handle crossing projects ([6d9cf9b](https://github.com/TheNoeTrevino/haunt.nvim/commit/6d9cf9bb95d5fef910f02537d53bc12f2167586e))
+* **migration:** add migration module for v1→v2 upgrade ([9572798](https://github.com/TheNoeTrevino/haunt.nvim/commit/9572798aa54c1f4e9d66c71c1cb2e053dd886f18))
+* **migration:** detect pending v1 storage and reload after migrate ([475f355](https://github.com/TheNoeTrevino/haunt.nvim/commit/475f355e2bfd63c73ff555722b4d2390edc36de6))
+* **persistence:** key storage path by git root commit hash ([f212643](https://github.com/TheNoeTrevino/haunt.nvim/commit/f212643e391d6ef0a6499ec844f95a3255416c94))
+* **persistence:** load v2 storage; v1 prompts :HauntMigrate ([637fc13](https://github.com/TheNoeTrevino/haunt.nvim/commit/637fc13af8f8a362f168c4d6065383bcd066cad9))
+* **persistence:** write v2 storage format with relative paths ([06b81ae](https://github.com/TheNoeTrevino/haunt.nvim/commit/06b81ae45b3a1e43efd9a2329659d20a820e833b))
+* **plugin:** register :HauntMigrate command ([4642b6a](https://github.com/TheNoeTrevino/haunt.nvim/commit/4642b6ad6dfc0c2fdbe7bf819fc1a72bf214e21f))
+* **project:** add project module for root and id detection ([1671cbe](https://github.com/TheNoeTrevino/haunt.nvim/commit/1671cbe4cff721499a9170f8764fa2d1fd4c922e))
+* **utils:** add project-relative path helpers ([7a11fa0](https://github.com/TheNoeTrevino/haunt.nvim/commit/7a11fa045f8070dc3791259cc4d25532d4cc8cc2))
+
+
+### Bug Fixes
+
+* cache not catching cwd changes ([35b7f7f](https://github.com/TheNoeTrevino/haunt.nvim/commit/35b7f7f6fe7d34024cec0424f0a56e38ce50a23c))
+* incorrect migration notification ([ebf7ec9](https://github.com/TheNoeTrevino/haunt.nvim/commit/ebf7ec91b2bc2d0f764cdbfdd0470f7c2994c2c3))
+* lazily create directory ([6ffcdcc](https://github.com/TheNoeTrevino/haunt.nvim/commit/6ffcdcc3af04f4fff277137ac2db8d06a58bbc79))
+* migrate if autocmd not triggered ([2de8ccb](https://github.com/TheNoeTrevino/haunt.nvim/commit/2de8ccb74cfbd9d715a6f8f061e11be13fb66c40))
+* notify on save_bookmarks failure ([c1342a1](https://github.com/TheNoeTrevino/haunt.nvim/commit/c1342a196aeb6a4587575c00b0992eaa7569db9b))
+* **setup:** apply custom data_dir synchronously ([1db443e](https://github.com/TheNoeTrevino/haunt.nvim/commit/1db443e8dad2f1044f67832b7fb4ab97ccd7c9c3))
+* track bookmark line through edits ([#72](https://github.com/TheNoeTrevino/haunt.nvim/issues/72)) ([5ca350c](https://github.com/TheNoeTrevino/haunt.nvim/commit/5ca350ce7002eb9baf09c0c64dd317c7f384c925))
+
 ## [0.8.1](https://github.com/TheNoeTrevino/haunt.nvim/compare/v0.8.0...v0.8.1) (2026-02-23)
 
 
