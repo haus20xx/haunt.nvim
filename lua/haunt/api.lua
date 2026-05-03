@@ -18,7 +18,6 @@
 ---@field load fun(): boolean
 ---@field restore_buffer_bookmarks fun(bufnr: number): boolean
 ---@field save fun(): boolean
----@field save_async fun(callback?: fun(success: boolean))
 ---@field annotate fun(text?: string): boolean
 ---@field clear fun(): boolean
 ---@field clear_all fun(): boolean
@@ -29,6 +28,7 @@
 ---@field yank_locations fun(opts?: SidekickOpts): boolean
 ---@field cleanup_buffer_tracking fun(bufnr: number)
 ---@field change_data_dir fun(new_dir: string|nil): boolean
+---@field reload fun(): boolean
 ---@field _reset_for_testing fun()
 
 ---@private
@@ -40,11 +40,11 @@ local utils = require("haunt.utils")
 
 ---@private
 ---@type boolean
-local _autosave_setup = false
+local _annotations_visible = true
 
 ---@private
 ---@type boolean
-local _annotations_visible = true
+local _absolute_notified = false
 
 ---@private
 ---@type StoreModule|nil
@@ -127,6 +127,18 @@ local function create_and_persist_bookmark(bufnr, filepath, line, note)
 	if not new_bookmark then
 		vim.notify("haunt.nvim: Failed to create bookmark: " .. (err or "unknown error"), vim.log.levels.ERROR)
 		return false
+	end
+
+	local project_root = require("haunt.project").get_info().root
+	if project_root and not utils.is_within_project(filepath, project_root) then
+		new_bookmark.absolute = true
+		if not _absolute_notified then
+			_absolute_notified = true
+			vim.notify(
+				"haunt.nvim: bookmark is outside project root; stored as absolute path (will not sync across machines)",
+				vim.log.levels.INFO
+			)
+		end
 	end
 
 	-- Set extmark for line tracking
@@ -231,12 +243,6 @@ function M.toggle_annotation()
 	---@cast display -nil
 
 	require("haunt")._ensure_initialized()
-
-	-- Set up autosave autocmds after first bookmark is created
-	if not _autosave_setup then
-		require("haunt").setup_autocmds()
-		_autosave_setup = true
-	end
 
 	local bufnr = vim.api.nvim_get_current_buf()
 
@@ -430,12 +436,6 @@ function M.annotate(text)
 
 	-- Ensure display layer is initialized
 	require("haunt")._ensure_initialized()
-
-	-- Set up autosave autocmds after first bookmark is created
-	if not _autosave_setup then
-		require("haunt").setup_autocmds()
-		_autosave_setup = true
-	end
 
 	-- Get current buffer and cursor position
 	local bufnr = vim.api.nvim_get_current_buf()
@@ -775,26 +775,6 @@ function M.save()
 	return store.save()
 end
 
---- Save bookmarks to persistent storage asynchronously.
----
---- Used for autosave scenarios where blocking I/O would cause UI lag.
---- Does not block the main thread.
----
----@param callback? fun(success: boolean) Optional callback when save completes
----
----@usage >lua
----   require('haunt.api').save_async(function(success)
----     if not success then
----       vim.notify("Failed to save bookmarks", vim.log.levels.WARN)
----     end
----   end)
---- <
-function M.save_async(callback)
-	ensure_modules()
-	---@cast store -nil
-	store.save_async(callback)
-end
-
 --- Jump to the next bookmark in the current buffer.
 ---
 --- Wraps around to the first bookmark if at the end.
@@ -847,6 +827,47 @@ function M.cleanup_buffer_tracking(bufnr)
 	restoration.cleanup_buffer_tracking(bufnr)
 end
 
+--- Refresh in-memory state from on-disk storage.
+---
+--- Clears extmarks and signs from all loaded buffers, resets restoration
+--- tracking, reloads the store from disk, then restores visuals on all
+--- loaded buffers. The on-disk state is treated as the source of truth —
+--- this does NOT call store.save() first.
+---
+--- Used after the storage file has been changed externally (data dir
+--- swap, migration, etc.).
+---
+---@return boolean success Always true once invoked
+function M.reload()
+	ensure_modules()
+	---@cast store -nil
+	---@cast display -nil
+	---@cast restoration -nil
+
+	-- Clear visuals from all loaded buffers
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
+			display.clear_buffer_marks(bufnr)
+			display.clear_buffer_signs(bufnr)
+		end
+	end
+
+	-- Reset restoration tracking so buffers can be re-restored
+	restoration.reset_tracking()
+
+	-- Reset store and reload from new location
+	store.reload()
+
+	-- Restore visuals for all loaded buffers
+	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
+			restoration.restore_buffer_bookmarks(bufnr, _annotations_visible)
+		end
+	end
+
+	return true
+end
+
 --- Change the data directory and reload all bookmarks.
 ---
 --- Saves current bookmarks to the old data_dir, clears all visual elements,
@@ -866,37 +887,11 @@ end
 function M.change_data_dir(new_dir)
 	ensure_modules()
 	---@cast store -nil
-	---@cast display -nil
 	---@cast persistence -nil
-	---@cast restoration -nil
 
 	store.save()
-
-	-- Clear visuals from all loaded buffers
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
-			display.clear_buffer_marks(bufnr)
-			display.clear_buffer_signs(bufnr)
-		end
-	end
-
-	-- Clear restoration tracking so buffers can be re-restored
-	restoration.reset_tracking()
-
-	-- Set new data_dir in persistence
 	persistence.set_data_dir(new_dir)
-
-	-- Reset store and reload from new location
-	store.reload()
-
-	-- Restore visuals for all loaded buffers
-	for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_is_valid(bufnr) then
-			restoration.restore_buffer_bookmarks(bufnr, _annotations_visible)
-		end
-	end
-
-	return true
+	return M.reload()
 end
 
 --- Reset internal state for testing purposes only
@@ -907,8 +902,8 @@ function M._reset_for_testing()
 	ensure_modules()
 	---@cast store -nil
 	store._reset_for_testing()
-	_autosave_setup = false
 	_annotations_visible = true
+	_absolute_notified = false
 end
 
 return M

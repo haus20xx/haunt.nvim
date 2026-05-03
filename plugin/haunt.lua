@@ -14,6 +14,7 @@
 --- `:HauntClear` - Clear all bookmarks in current buffer
 --- `:HauntClearAll` - Clear all bookmarks across all files
 --- `:HauntChangeDataDir [path]` - Change bookmark data directory (for project-specific bookmarks)
+--- `:HauntMigrate` - Migrate bookmarks from v1 to v2 storage (project-relative paths)
 ---
 
 -- haunt.nvim plugin loader
@@ -61,6 +62,11 @@ end
 vim.api.nvim_create_user_command("HauntList", function()
 	require("haunt.picker").show()
 end, { desc = "List all bookmarks" })
+
+-- Special case for HauntMigrate (one-shot v1->v2 storage migration)
+vim.api.nvim_create_user_command("HauntMigrate", function()
+	require("haunt.migration").migrate_current_project()
+end, { desc = "Migrate bookmarks from v1 to v2 storage (project-relative paths)" })
 
 -- Deferred restoration setup. Dashboard plugins seemingly block this
 vim.api.nvim_create_autocmd("UIEnter", {

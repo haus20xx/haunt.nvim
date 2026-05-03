@@ -4,7 +4,6 @@
 ---@field load fun(): boolean
 ---@field reload fun()
 ---@field save fun(): boolean
----@field save_async fun(callback?: fun(success: boolean))
 ---@field get_quickfix_items fun(opts?: QuickfixOpts): QuickfixItem[]
 ---@field find_by_id fun(bookmark_id: string): Bookmark|nil, number|nil
 ---@field get_bookmark_at_line fun(filepath: string, line: number): Bookmark|nil, number|nil
@@ -15,6 +14,8 @@
 ---@field clear_file_bookmarks fun(filepath: string): Bookmark[]
 ---@field clear_all_bookmarks fun(): number
 ---@field get_all_raw fun(): Bookmark[]
+---@field get_loaded_project_id fun(): string|nil
+---@field get_loaded_project_root fun(): string|nil
 ---@field _reset_for_testing fun()
 
 ---@type StoreModule
@@ -44,6 +45,25 @@ local bookmarks_by_file = {}
 ---@private
 ---@type boolean
 local _loaded = false
+
+---@private
+--- The project_id the in-memory bookmarks belong to. Set on load/reload.
+--- Used by `haunt.project.handle_dir_change` to detect cross-project cd.
+---@type string|nil
+local _loaded_project_id = nil
+
+---@private
+--- The project root the in-memory bookmarks were serialized against, captured
+--- at load time. Saves always use this root (not the cache's current value)
+--- so a `:cd` into a different project doesn't corrupt the relative paths.
+---@type string|nil
+local _loaded_project_root = nil
+
+---@private
+--- The storage path the in-memory bookmarks were loaded from. Saves always
+--- write here, regardless of where the project cache would resolve "now".
+---@type string|nil
+local _loaded_storage_path = nil
 
 ---@private
 ---@type PersistenceModule|nil
@@ -288,6 +308,11 @@ function M.load()
 	end
 	_loaded = true
 
+	local info = require("haunt.project").get_info()
+	_loaded_project_id = info.project_id
+	_loaded_project_root = info.root
+	_loaded_storage_path = persistence.get_storage_path()
+
 	return true
 end
 
@@ -299,32 +324,64 @@ function M.reload()
 	bookmarks = {}
 	bookmarks_by_file = {}
 	_loaded = false
+	_loaded_project_id = nil
+	_loaded_project_root = nil
+	_loaded_storage_path = nil
 	M.load()
+end
+
+--- Pull each bookmark's current line from its tracking extmark.
+--- The visual extmark moves with text edits, but `bookmark.line` is set at
+--- creation and never reassigned — without this sync the on-disk line is
+--- pinned forever (issue #72).
+local function sync_lines_from_extmarks()
+	local display = require("haunt.display")
+	for _, bm in ipairs(bookmarks) do
+		if not bm.extmark_id then
+			goto continue
+		end
+
+		local bufnr = vim.fn.bufnr(bm.file)
+		if bufnr == -1 or not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+			goto continue
+		end
+
+		local cur = display.get_extmark_line(bufnr, bm.extmark_id)
+		if cur then
+			bm.line = cur
+		end
+
+		::continue::
+	end
 end
 
 --- Save bookmarks to persistent storage.
 ---
---- Bookmarks are auto-saved on text changes (debounced) and Neovim exit,
---- but you can call this manually to force a save.
+--- Pulls each bookmark's current line from its tracking extmark, then writes
+--- to the stamped storage path/root captured at load time (not the project
+--- cache's current values), so a `:cd` into a different project doesn't
+--- redirect saves mid-flight.
 ---
 ---@return boolean success True if save succeeded
 function M.save()
 	ensure_persistence()
 	---@cast persistence -nil
-	local success = persistence.save_bookmarks(bookmarks)
-	return success
+	sync_lines_from_extmarks()
+	return persistence.save_bookmarks(bookmarks, _loaded_storage_path, _loaded_project_root)
 end
 
---- Save bookmarks to persistent storage asynchronously.
----
---- Used for autosave scenarios where blocking I/O would cause UI lag.
---- Does not block the main thread.
----
----@param callback? fun(success: boolean) Optional callback when save completes
-function M.save_async(callback)
-	ensure_persistence()
-	---@cast persistence -nil
-	persistence.save_bookmarks_async(bookmarks, nil, callback)
+--- The project_id stamped onto the in-memory store. Used by the dir-change
+--- handler to detect when the user has cd'd into a different project.
+---@return string|nil
+function M.get_loaded_project_id()
+	return _loaded_project_id
+end
+
+--- The project root stamped onto the in-memory store. Used by the dir-change
+--- handler to short-circuit when cwd is still under this root.
+---@return string|nil
+function M.get_loaded_project_root()
+	return _loaded_project_root
 end
 
 --- Add a bookmark to the store
@@ -409,6 +466,9 @@ function M._reset_for_testing()
 	bookmarks = {}
 	bookmarks_by_file = {}
 	_loaded = true -- Prevent auto-loading from disk
+	_loaded_project_id = nil
+	_loaded_project_root = nil
+	_loaded_storage_path = nil
 end
 
 return M

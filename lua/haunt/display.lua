@@ -201,12 +201,12 @@ function M.set_bookmark_mark(bufnr, bookmark)
 		return nil
 	end
 
-	-- Create extmark with right_gravity=false so it stays at the beginning of the line
-	-- even when text is inserted at the start of the line
+	-- right_gravity=true: when a new line is inserted *at* the bookmark's
+	-- position (e.g. `O` to open a line above), the extmark moves down to
+	-- track the original line's content rather than left-anchoring and
+	-- sticking to the newly inserted line. See issue #72.
 	local ok, extmark_id = pcall(vim.api.nvim_buf_set_extmark, bufnr, M.get_namespace(), line, 0, {
-		-- Track line movements automatically
-		right_gravity = false,
-		-- This extmark is invisible - it's only for tracking the line position
+		right_gravity = true,
 	})
 
 	if not ok then

@@ -3,6 +3,9 @@
 ---@field validate_buffer_for_bookmarks fun(bufnr: number): boolean, string|nil
 ---@field ensure_buffer_for_file fun(filepath: string): number|nil, string|nil
 ---@field toggle_quickfix fun(): nil
+---@field to_relative fun(absolute_path: string, project_root: string): string|nil
+---@field to_absolute fun(relative_path: string, project_root: string): string
+---@field is_within_project fun(absolute_path: string, project_root: string): boolean
 
 ---@type UtilsModule
 ---@diagnostic disable-next-line: missing-fields
@@ -89,6 +92,85 @@ function M.toggle_quickfix()
 		end
 	end
 	vim.cmd("copen")
+end
+
+--- Strip a trailing slash from a path, unless the path is just "/"
+---@param path string
+---@return string
+local function strip_trailing_slash(path)
+	if #path > 1 and path:sub(-1) == "/" then
+		return path:sub(1, -2)
+	end
+	return path
+end
+
+--- Convert an absolute path to a path relative to project_root
+--- Returns nil if absolute_path is outside project_root or equals it.
+--- The project root itself is a directory and not a meaningful bookmark
+--- target, so equality returns nil rather than ".".
+--- Performs textual normalization only (does not resolve symlinks).
+---@param absolute_path string An absolute file path
+---@param project_root string The project root directory (absolute)
+---@return string|nil relative_path Relative path, or nil if outside or equal
+function M.to_relative(absolute_path, project_root)
+	if absolute_path == nil or project_root == nil then
+		return nil
+	end
+
+	local norm_path = strip_trailing_slash(vim.fs.normalize(absolute_path))
+	local norm_root = strip_trailing_slash(vim.fs.normalize(project_root))
+
+	if norm_path == norm_root then
+		return nil
+	end
+
+	-- Match prefix only at a directory boundary to avoid /proj matching /proj-other
+	local prefix = norm_root .. "/"
+	if norm_path:sub(1, #prefix) ~= prefix then
+		return nil
+	end
+
+	local relative = norm_path:sub(#prefix + 1)
+	-- Sanity check: a relative path that climbs out is not within the project
+	if relative == "" or relative:sub(1, 2) == ".." then
+		return nil
+	end
+
+	return relative
+end
+
+--- Convert a project-relative path to an absolute path
+--- Joins project_root and relative_path and normalizes the result.
+---@param relative_path string A path relative to project_root
+---@param project_root string The project root directory (absolute)
+---@return string absolute_path The normalized absolute path
+function M.to_absolute(relative_path, project_root)
+	local norm_root = strip_trailing_slash(vim.fs.normalize(project_root))
+	if relative_path == "." or relative_path == "" then
+		return norm_root
+	end
+	return vim.fs.normalize(norm_root .. "/" .. relative_path)
+end
+
+--- Check whether absolute_path lives within project_root
+--- Comparison is textual (no symlink resolution).
+---@param absolute_path string An absolute file path
+---@param project_root string The project root directory (absolute)
+---@return boolean within True if absolute_path == project_root or is a descendant
+function M.is_within_project(absolute_path, project_root)
+	if absolute_path == nil or project_root == nil then
+		return false
+	end
+
+	local norm_path = strip_trailing_slash(vim.fs.normalize(absolute_path))
+	local norm_root = strip_trailing_slash(vim.fs.normalize(project_root))
+
+	if norm_path == norm_root then
+		return true
+	end
+
+	local prefix = norm_root .. "/"
+	return norm_path:sub(1, #prefix) == prefix
 end
 
 return M

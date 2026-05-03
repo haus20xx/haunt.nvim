@@ -61,6 +61,7 @@ Or use the provided commands: >vim
   :HauntClearAll
   :HauntQf
   :HauntQfAll
+  :HauntMigrate          " Migrate legacy v1 bookmark file to v2 format
 <
 
 # Recommended Keymaps ~
@@ -98,25 +99,99 @@ Or use the provided commands: >vim
 # Persistence ~
                                                          *haunt-persistence*
 
-Bookmarks are automatically saved and loaded:
-  - Location: `~/.local/share/nvim/haunt/` (or custom data_dir)
-  - Format: JSON files named by git repo + branch hash
-  - Auto-save: On buffer hide and Neovim exit
-  - Per-branch: Each git branch has its own bookmark set
+Bookmarks are saved automatically as JSON, one file per (project,
+branch). The storage path is:
+>
+  ~/.local/share/nvim/haunt/<hash>.json   (or your custom `data_dir`)
+<
 
-This means you can:
-  - Switch branches without losing bookmarks
-  - Have different bookmarks for different features
-  - Share bookmark files with your team (optional)
+where `<hash>` is `sha256(project_id | branch)` truncated to 12 chars
+and `project_id` is, in order of preference:
+
+  1. Git root commit hash (`git rev-list --max-parents=0 HEAD`)
+  2. Git repository top-level path
+  3. Current working directory
+
+Inside the JSON, file paths are stored *relative* to the project root.
+Bookmarks for files outside the project (e.g. `~/.config/nvim/init.lua`
+while you're working in another repo) are stored with absolute paths
+and an `absolute: true` flag, so they stay scoped to the project where
+they were created.
+
+Because keying is by root commit (not by the absolute repo path on
+this machine), forks and clones of the same project share the same
+bookmark file. Combined with relative paths, the file is portable
+across machines and checkouts.
+
+Auto-save fires on text changes (debounced) and on Neovim exit.
+Per-branch storage means each git branch keeps its own bookmark set.
+
+# Sharing Bookmarks ~
+                                                             *haunt-sharing*
+
+Because the bookmark file is portable, you can share it across
+machines or with teammates. Two common workflows:
+
+Team sharing via git: ~
+
+Commit the bookmark file to your repo so teammates pick up the same
+hauntings. Either copy the existing file into the repo:
+>sh
+  cp ~/.local/share/nvim/haunt/<hash>.json <repo>/.haunts.json
+<
+
+Or set `data_dir` to a path inside the repo so the file lives there
+by default, then commit:
+>lua
+  require("haunt").setup({
+    data_dir = vim.fn.getcwd() .. "/.haunts/",
+  })
+<
+
+Personal sync across machines: ~
+
+Point `data_dir` at a NAS mount or a private git repo so your
+bookmarks follow you across machines without leaking into the
+project's shared git history. NFS over Tailscale works well:
+>lua
+  require("haunt").setup({ data_dir = "/mnt/nas/haunt/" })
+<
+
+Or a private git repo cloned locally:
+>lua
+  require("haunt").setup({
+    data_dir = vim.fn.expand("~/haunt-bookmarks/"),
+  })
+<
+
+For folder-sync tools (Dropbox, Syncthing, iCloud), be aware that
+writes are non-atomic — concurrent writes from multiple machines
+can produce sync-conflict copies. Git-based sync is safer.
+
+# Migrating from v1 ~
+                                                           *haunt-migration*
+
+v1 bookmark files (absolute paths, repo-path-keyed filename) are not
+auto-loaded. On startup, haunt.nvim auto-migrates the current
+project's v1 file to v2: it writes the v2 file at the new storage
+path and renames the old file to `<old>.v1.bak`. Nothing is deleted.
+
+For projects where automatic migration didn't run (or to retry
+explicitly), invoke `:HauntMigrate` from inside the project.
 
 # Troubleshooting ~
                                                       *haunt-troubleshooting*
 
 Bookmarks not persisting: ~
 
-Make sure you're in a git repository with an active branch.
-haunt.nvim uses git to determine where to save bookmarks.
-If not in a git repo, bookmarks are stored per working directory.
+haunt.nvim derives a stable project identifier with the following
+fallback chain:
+  1. Git root commit hash (`git rev-list --max-parents=0 HEAD`)
+  2. Git repository top-level path
+  3. Current working directory
+The storage filename is `sha256(project_id | branch)`. If you switch
+between these tiers (e.g. add a first commit to a new repo) the file
+name will change, which can look like "lost" bookmarks.
 
 Signs not showing: ~
 
@@ -131,8 +206,10 @@ If it does occur, save your bookmarks and restart Neovim.
 
 Picker not working: ~
 
-The picker requires Snacks.nvim (https://github.com/folke/snacks.nvim).
-Install it via your plugin manager.
+The picker supports Snacks.nvim (https://github.com/folke/snacks.nvim)
+and Telescope.nvim (https://github.com/nvim-telescope/telescope.nvim).
+Install one via your plugin manager, or configure which to use via
+the `picker` option: "snacks", "telescope", or "auto" (default).
 
 ------------------------------------------------------------------------------
 Class ~
@@ -151,12 +228,6 @@ Fields ~
                                  `_initialized`
 Type ~
 `(boolean)`
-
-------------------------------------------------------------------------------
-                                                                    *save_timer*
-                                  `save_timer`
-Type ~
-`(uv_timer_t)`
 
 ------------------------------------------------------------------------------
                                                                      *M.setup()*
@@ -225,9 +296,12 @@ Default configuration: ~
   	sign_hl = "DiagnosticInfo",
   	virt_text_hl = "HauntAnnotation",
   	annotation_prefix = " 󰆉 ",
+  	annotation_suffix = "",
   	line_hl = nil,
   	virt_text_pos = "eol",
   	data_dir = nil,
+  	per_branch_bookmarks = true,
+  	picker = "auto",
   	picker_keys = {
   		delete = { key = "d", mode = { "n" } },
   		edit_annotation = { key = "a", mode = { "n" } },
@@ -239,10 +313,13 @@ Fields ~
 {sign_hl} `(optional)` `(string)` The highlight group for the sign text (default: 'DiagnosticInfo')
 {virt_text_hl} `(optional)` `(string)` The highlight group for virtual text annotations (default: 'HauntAnnotation')
 {annotation_prefix} `(optional)` `(string)` Text to display before the annotation (default: '  ')
+{annotation_suffix} `(optional)` `(string)` Text to display after the annotation (default: '')
 {line_hl} `(optional)` `(string|nil)` The highlight group for the entire line (default: nil)
 {virt_text_pos} `(optional)` `(string)` Position of virtual text: "eol" (default), "eol_right_align", "overlay", "right_align", "inline"
 {data_dir} `(optional)` `(string|nil)` Custom data directory path (default: vim.fn.stdpath("data") .. "/haunt/")
+{picker} `(optional)` "`(snacks)`"|"telescope"|"fzf"|"auto" Which picker to use: "snacks", "telescope", "fzf", or "auto" (default: "auto"). "auto" tries Snacks first, then Telescope, then fzf-lua, then vim.ui.select
 {picker_keys} `(table<string, table>)` Keybindings for picker actions (default: {delete = {key = 'd', mode = {'n'}}, edit_annotation = {key = 'a', mode = {'n'}}})
+{per_branch_bookmarks} `(optional)` `(boolean)` Whether bookmarks are scoped per git branch (default: true). When false, bookmarks persist across all branches in the same repository.
 
 ------------------------------------------------------------------------------
                                                                    *user_config*
@@ -285,6 +362,7 @@ Fields ~
 {yank_locations} `(fun(opts?: SidekickOpts): boolean)`
 {cleanup_buffer_tracking} `(fun(bufnr: number))`
 {change_data_dir} `(fun(new_dir: string|nil): boolean)`
+{reload} `(fun(): boolean)`
 {_reset_for_testing} `(fun())`
 
 ------------------------------------------------------------------------------
@@ -526,8 +604,8 @@ Return ~
                                    `M.save`()
 Save bookmarks to persistent storage.
 
-Bookmarks are auto-saved on buffer hide and Neovim exit, but you can
-call this manually to force a save.
+Bookmarks are auto-saved on text changes (debounced) and Neovim exit,
+but you can call this manually to force a save.
 
 Return ~
 `(boolean)` success True if save succeeded
@@ -586,6 +664,22 @@ Parameters ~
 {bufnr} `(number)` Buffer number that was deleted
 
 ------------------------------------------------------------------------------
+                                                                    *M.reload()*
+                                  `M.reload`()
+Refresh in-memory state from on-disk storage.
+
+Clears extmarks and signs from all loaded buffers, resets restoration
+tracking, reloads the store from disk, then restores visuals on all
+loaded buffers. The on-disk state is treated as the source of truth —
+this does NOT call store.save() first.
+
+Used after the storage file has been changed externally (data dir
+swap, migration, etc.).
+
+Return ~
+`(boolean)` success Always true once invoked
+
+------------------------------------------------------------------------------
                                                            *M.change_data_dir()*
                          `M.change_data_dir`({new_dir})
 Change the data directory and reload all bookmarks.
@@ -625,10 +719,11 @@ Represents a single bookmark in haunt.nvim.
 Class ~
 {Bookmark}
 Fields ~
-{file} `(string)` Absolute path to the bookmarked file
+{file} `(string)` Absolute path while in memory; serialized as relative to project root unless `absolute=true`
 {line} `(number)` 1-based line number of the bookmark
 {note} `(string|nil)` Optional annotation text displayed as virtual text
 {id} `(string)` Unique bookmark identifier (auto-generated)
+{absolute} `(optional)` `(boolean)` Whether file is stored as absolute path (out-of-project)
 {extmark_id} `(number|nil)` Extmark ID for line tracking (internal)
 {annotation_extmark_id} `(number|nil)` Extmark ID for annotation display (internal)
 
@@ -639,49 +734,22 @@ Fields ~
 {set_data_dir} `(fun(dir: string|nil))`
 {ensure_data_dir} `(fun(): string|nil,)` string|nil
 {get_git_info} `(fun(): {root: string|nil, branch: string|nil})`
-{get_storage_path} `(fun(): string|nil,)` string|nil
-{save_bookmarks} `(fun(bookmarks: Bookmark[], filepath?: string): boolean)`
+{get_storage_path} `(fun(): string)`
+{_get_v1_storage_path} `(fun(repo_root: string, branch: string|nil, per_branch: boolean|nil): string)`
+{save_bookmarks} `(fun(bookmarks: Bookmark[], filepath?: string, project_root?: string|nil): boolean)`
 {load_bookmarks} `(fun(filepath?: string): Bookmark[]|nil)`
 {create_bookmark} `(fun(file: string, line: number, note?: string): Bookmark|nil,)` string|nil
 {is_valid_bookmark} `(fun(bookmark: table): boolean)`
+{_build_serializable} `(fun(bookmarks: Bookmark[], project_root?: string|nil): table[])`
 
 ------------------------------------------------------------------------------
-                                                               *_git_info_cache*
-                               `_git_info_cache`
-Type ~
-`({root: string|nil, branch: string|nil}|nil)`
-
-------------------------------------------------------------------------------
-                                                                   *_cache_time*
-                                 `_cache_time`
-Type ~
-`(number)`
-
-------------------------------------------------------------------------------
-                                                                     *CACHE_TTL*
-                                  `CACHE_TTL`
-Type ~
-`(number)`
-
-------------------------------------------------------------------------------
-                                                            *_git_warning_shown*
-                              `_git_warning_shown`
-Type ~
-`(boolean)`
-
-------------------------------------------------------------------------------
-                                                                *get_git_root()*
-                                `get_git_root`()
-Gets the git root directory for the current working directory
+                                                              *M.get_git_info()*
+                               `M.get_git_info`()
+Get git repository information for the current working directory.
+Thin shim over haunt.project for backward compatibility with consumers
+(and the test suite) that referenced this on persistence.
 Return ~
-`(string|nil)` git_root The git repository root path, or nil if not in a git repo
-
-------------------------------------------------------------------------------
-                                                              *get_git_branch()*
-                               `get_git_branch`()
-Gets the current git branch name
-Return ~
-`(string|nil)` branch The current git branch name, or nil if not in a git repo
+`({ root: string|nil, branch: string|nil })`
 
 ------------------------------------------------------------------------------
                                                               *M.set_data_dir()*
@@ -692,6 +760,12 @@ Parameters ~
 {dir} `(string|nil)` Custom data directory path, or nil to reset to default
 
 ------------------------------------------------------------------------------
+                                                                *get_data_dir()*
+                                `get_data_dir`()
+Return ~
+`(string)` data_dir The haunt data directory path
+
+------------------------------------------------------------------------------
                                                            *M.ensure_data_dir()*
                              `M.ensure_data_dir`()
 Ensures the haunt data directory exists
@@ -699,33 +773,90 @@ Return ~
 `(string)` data_dir The haunt data directory path
 
 ------------------------------------------------------------------------------
-                                                              *M.get_git_info()*
-                               `M.get_git_info`()
-Get git repository information for the current working directory
-Uses caching with 5-second TTL to avoid repeated system calls
-@return { root: string|nil, branch: string|nil }
-Returns a table with:
-  - root: absolute path to git repository root, or nil if not in a git repo
-  - branch: name of current branch, or nil if not in a git repo, detached HEAD, or no commits
+                                                                *path_for_key()*
+                             `path_for_key`({key})
+Parameters ~
+{key} `(string)` Pre-built keying string to hash into the filename
+Return ~
+`(string)` path
 
 ------------------------------------------------------------------------------
                                                           *M.get_storage_path()*
                              `M.get_storage_path`()
-Generates a storage path for the current git repository and branch
-Uses an 8-character SHA256 hash of "repo_root|branch" for the filename
-Falls back to CWD and "__default__" branch when not in a git repository
+Generates a storage path for the current project and branch.
+Uses a 12-character SHA256 hash of "project_id|branch" (or just "project_id"
+when per_branch_bookmarks is disabled). project_id is a stable identifier
+(root commit hash, repo path, or cwd) supplied by haunt.project, so
+forks/clones of the same project produce the same storage file.
 Return ~
 `(string)` path The full path to the storage file
 
 ------------------------------------------------------------------------------
+                                                      *M._get_v1_storage_path()*
+         `M._get_v1_storage_path`({repo_root}, {branch}, {per_branch})
+Compute the legacy v1 storage path for a project keyed by repo path.
+Exposed for haunt.migration; not part of the stable public API.
+Parameters ~
+{repo_root} `(string)` Absolute path to the git repository root
+{branch} `(string|nil)` Current branch (nil falls back to the default-branch key)
+{per_branch} `(boolean|nil)` Whether per-branch bookmarks are enabled (truthy means yes)
+Return ~
+`(string)` path
+
+------------------------------------------------------------------------------
+                                                       *M._build_serializable()*
+              `M._build_serializable`({bookmarks}, {project_root})
+Build a serializable copy of bookmarks for v2 storage.
+- In-project bookmarks are stored relative to the project root.
+- Bookmarks flagged `absolute=true`, or whose file lies outside the project,
+  are stored as absolute paths with `absolute=true`.
+- Runtime-only fields (extmark IDs) are stripped.
+Parameters ~
+{bookmarks} `(Bookmark[])` In-memory bookmarks list
+{project_root} `(string|nil)` Project root; defaults to the cached project info
+Return ~
+`(table[])` serializable Transformed bookmarks ready to be JSON-encoded
+
+------------------------------------------------------------------------------
+                                                          *build_save_payload()*
+         `build_save_payload`({bookmarks}, {filepath}, {project_root})
+Build the JSON payload + storage path for a save operation.
+Shared by sync and async save paths.
+Parameters ~
+{bookmarks} `(table)`
+{filepath} `(optional)` `(string)`
+{project_root} `(optional)` `(string|nil)` Override project root for serialization (callers
+with a stamped origin pass it here so the save reflects the project the
+bookmarks belong to, not whatever the cache currently resolves to).
+Return ~
+`({storage_path: string, json_str: string}|nil)` payload
+Return ~
+`(string|nil)` err
+
+------------------------------------------------------------------------------
                                                             *M.save_bookmarks()*
-                  `M.save_bookmarks`({bookmarks}, {filepath})
+          `M.save_bookmarks`({bookmarks}, {filepath}, {project_root})
 Save bookmarks to JSON file
 Parameters ~
 {bookmarks} `(table)` Array of bookmark tables to save
 {filepath} `(optional)` `(string)` Optional custom file path (defaults to git-based path)
+{project_root} `(optional)` `(string|nil)` Optional project root for serialization
 Return ~
 `(boolean)` success True if save was successful, false otherwise
+
+------------------------------------------------------------------------------
+                                                        *resolve_v2_bookmarks()*
+                      `resolve_v2_bookmarks`({bookmarks})
+Resolve v2 bookmarks: turn project-relative paths back into absolute paths.
+- bookmark.absolute == true: file is already absolute, pass through unchanged.
+- otherwise: resolve relative to the current project root.
+  When no project root is available (not in a git repo), emit a single warning
+  and leave bookmark.file as the stored relative string. The bookmark won't
+  resolve to a real file but the load will not crash.
+Parameters ~
+{bookmarks} `(table[])` Raw bookmarks read from disk (v2 shape)
+Return ~
+`(table[])` resolved Bookmarks with absolute file paths in memory
 
 ------------------------------------------------------------------------------
                                                             *M.load_bookmarks()*
@@ -769,10 +900,18 @@ Validate a bookmark structure
 # Picker ~
 
 The picker provides an interactive interface to browse and manage bookmarks.
-Uses Snacks.nvim (https://github.com/folke/snacks.nvim) if available,
-otherwise falls back to vim.ui.select for basic functionality.
+Supports Snacks.nvim (https://github.com/folke/snacks.nvim),
+Telescope.nvim (https://github.com/nvim-telescope/telescope.nvim), and
+fzf-lua (https://github.com/ibhagwan/fzf-lua).
+Falls back to vim.ui.select for basic functionality if none are available.
 
-Picker actions (Snacks.nvim only): ~
+Configure which picker to use via |HauntConfig|.picker:
+  - `"auto"` (default): Try Snacks, Telescope, fzf-lua, then vim.ui.select
+  - `"snacks"`: Use Snacks.nvim picker
+  - `"telescope"`: Use Telescope.nvim picker
+  - `"fzf"`: Use fzf-lua picker
+
+Picker actions: ~
   - `<CR>`: Jump to the selected bookmark
   - `d` (normal mode): Delete the selected bookmark
   - `a` (normal mode): Edit the bookmark's annotation
@@ -780,13 +919,35 @@ Picker actions (Snacks.nvim only): ~
 The keybindings can be customized via |HauntConfig|.picker_keys.
 
 ------------------------------------------------------------------------------
+                                                                             *M*
+                                      `M`
+Type ~
+`(PickerRouter)`
+
+------------------------------------------------------------------------------
                                                                       *M.show()*
                                 `M.show`({opts})
 Open the bookmark picker.
 
-Displays all bookmarks in an interactive picker powered by Snacks.nvim.
-Allows jumping to, deleting, or editing bookmark annotations (Snacks.nvim only).
-Falls back to vim.ui.select if Snacks.nvim is not available.
+Displays all bookmarks in an interactive picker. The picker used depends
+on the |HauntConfig|.picker setting:
+  - `"auto"` (default): Try Snacks, Telescope, fzf-lua, then vim.ui.select
+  - `"snacks"`: Use Snacks.nvim picker
+  - `"telescope"`: Use Telescope.nvim picker
+  - `"fzf"`: Use fzf-lua picker
+
+Allows jumping to, deleting, or editing bookmark annotations, if you have
+snacks or telescope installed. Otherwise, falls back to a vim.ui.select
+
+Note: The opts parameter is passed directly to the underlying picker
+implementation. It is up to the user to ensure they're passing the
+correct type for their configured picker. Consider annotating the type
+yourself, e.g.:
+>lua
+  ---@type snacks.picker.Config
+  local opts = { ... }
+  require('haunt.picker').show(opts)
+<
 
 Usage ~
 >lua
@@ -794,7 +955,7 @@ Usage ~
   require('haunt.picker').show()
 
 Parameters ~
-{opts} `(optional)` `(snacks.picker.Config)` Options to pass to Snacks.picker
+{opts} `(optional)` `(table)` Options passed to the underlying picker
 
 
 ==============================================================================
@@ -859,6 +1020,7 @@ haunt.nvim provides the following user commands:
 `:HauntClear` - Clear all bookmarks in current buffer
 `:HauntClearAll` - Clear all bookmarks across all files
 `:HauntChangeDataDir [path]` - Change bookmark data directory (for project-specific bookmarks)
+`:HauntMigrate` - Migrate bookmarks from v1 to v2 storage (project-relative paths)
 
 ------------------------------------------------------------------------------
 Class ~

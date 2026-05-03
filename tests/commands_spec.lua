@@ -26,6 +26,7 @@ describe("haunt user commands", function()
 			"HauntPrev",
 			"HauntQf",
 			"HauntQfAll",
+			"HauntMigrate",
 		}
 
 		for _, cmd in ipairs(expected_commands) do
@@ -287,6 +288,50 @@ describe("haunt user commands", function()
 			vim.cmd("HauntQf")
 
 			assert.is_true(helpers.is_quickfix_open())
+		end)
+	end)
+
+	describe("HauntMigrate", function()
+		local project_mock = require("tests.helpers.project_mock")
+		local original_notify
+		local notify_calls
+
+		before_each(function()
+			notify_calls = {}
+			original_notify = vim.notify
+			vim.notify = function(msg, level)
+				table.insert(notify_calls, { msg = msg, level = level })
+			end
+
+			-- Inject "not in a git repo" project info.
+			project_mock.set({ root = nil, branch = nil, project_id = vim.fn.getcwd() })
+		end)
+
+		after_each(function()
+			vim.notify = original_notify
+			project_mock.restore()
+		end)
+
+		it("is registered as a user command", function()
+			assert.are.equal(2, vim.fn.exists(":HauntMigrate"))
+		end)
+
+		it("does not crash when invoked outside a git repo", function()
+			local ok, err = pcall(vim.cmd, "HauntMigrate")
+			assert.is_true(ok, "HauntMigrate raised an error: " .. tostring(err))
+		end)
+
+		it("emits a warning notify when invoked outside a git repo", function()
+			pcall(vim.cmd, "HauntMigrate")
+
+			local saw_warn = false
+			for _, call in ipairs(notify_calls) do
+				if call.level == vim.log.levels.WARN and type(call.msg) == "string" and call.msg:match("not in a git repo") then
+					saw_warn = true
+					break
+				end
+			end
+			assert.is_true(saw_warn, "expected a WARN notify mentioning 'not in a git repo'")
 		end)
 	end)
 

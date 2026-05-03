@@ -220,7 +220,7 @@ describe("change_data_dir", function()
 				assert.is_not_nil(saved_data.bookmarks)
 				assert.are.equal(1, #saved_data.bookmarks)
 				assert.are.equal("Save me before switch", saved_data.bookmarks[1].note)
-				assert.are.equal(1, saved_data.version)
+				assert.are.equal(2, saved_data.version)
 			end)
 
 			it("sets new data_dir in persistence", function()
@@ -486,7 +486,59 @@ describe("change_data_dir", function()
 			end)
 		end)
 
+		describe("cwd change within cache TTL", function()
+			local original_cwd
+			local non_git_dir
+
+			before_each(function()
+				original_cwd = vim.fn.getcwd()
+				non_git_dir = helpers.create_temp_data_dir()
+			end)
+
+			after_each(function()
+				vim.fn.chdir(original_cwd)
+				helpers.cleanup_temp_dir(non_git_dir)
+			end)
+
+			it("loads bookmarks for the new cwd context after cd", function()
+				bufnr, test_file = helpers.create_test_buffer({ "Line 1", "Line 2", "Line 3" })
+
+				-- Resolve the canonical cwd for non_git_dir without going through
+				-- persistence (which would populate the git_info cache and mask the bug).
+				vim.fn.chdir(non_git_dir)
+				local non_git_cwd = vim.fn.getcwd()
+				vim.fn.chdir(original_cwd)
+
+				local target_hash = vim.fn.sha256(non_git_cwd .. "|__default__"):sub(1, 12)
+				helpers.create_bookmarks_file(data_dir_2, {
+					{ file = test_file, line = 2, id = "regress73", note = "Issue 73" },
+				}, target_hash)
+
+				persistence.set_data_dir(data_dir_1)
+				local _ = persistence.get_git_info()
+
+				vim.fn.chdir(non_git_dir)
+				api.change_data_dir(data_dir_2)
+
+				local bookmarks = api.get_bookmarks()
+				assert.are.equal(1, #bookmarks)
+				assert.are.equal("Issue 73", bookmarks[1].note)
+			end)
+		end)
+
 		describe("round-trip integration", function()
+			local project_mock = require("tests.helpers.project_mock")
+
+			before_each(function()
+				-- Inject a stable project root so v2 save+load resolves to the same
+				-- project regardless of the buffer file location (tempnames live under /tmp).
+				project_mock.set({ root = "/tmp", branch = "main", project_id = "tmp" })
+			end)
+
+			after_each(function()
+				project_mock.restore()
+			end)
+
 			it("round-trip: switch away and back restores original bookmarks", function()
 				bufnr, test_file = helpers.create_test_buffer({ "Line 1", "Line 2", "Line 3" })
 

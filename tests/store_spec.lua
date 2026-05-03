@@ -331,6 +331,102 @@ describe("haunt.store", function()
 			assert.is_not_nil(mock_persistence.saved_bookmarks)
 			assert.are.equal(2, #mock_persistence.saved_bookmarks)
 		end)
+
+		it("tracks the original line when a new line is inserted at the bookmark's position (issue #72)", function()
+			-- Reproduces the exact scenario from issue #72: bookmark on line N,
+			-- user inserts a line at line N (e.g. `O` to open a comment line
+			-- above), so the original code shifts to line N+1. The bookmark
+			-- must follow the original code, not stay pinned to N (which now
+			-- holds the new comment line). Requires the tracking extmark to
+			-- have right_gravity=true; with right_gravity=false the extmark
+			-- left-anchors and stays on the inserted line.
+			local display = require("haunt.display")
+
+			local tmpfile = vim.fn.tempname() .. ".lua"
+			local bufnr = vim.api.nvim_create_buf(false, false)
+			vim.api.nvim_buf_set_name(bufnr, tmpfile)
+			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {
+				"line 1",
+				"line 2",
+				"target",
+				"line 4",
+			})
+
+			local extmark_id = display.set_bookmark_mark(bufnr, { line = 3 })
+			assert.is_not_nil(extmark_id)
+
+			store.add_bookmark({
+				file = tmpfile,
+				line = 3,
+				id = "gravity_test",
+				extmark_id = extmark_id,
+			})
+
+			vim.api.nvim_buf_set_lines(bufnr, 2, 2, false, { "-- new comment" })
+
+			store.save()
+
+			local current_line = display.get_extmark_line(bufnr, extmark_id)
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+
+			assert.are.equal(
+				4,
+				current_line,
+				"extmark should have moved to line 4 (where 'target' lives now), not stayed on line 3 (the new comment)"
+			)
+			assert.are.equal(
+				4,
+				mock_persistence.saved_bookmarks[1].line,
+				"persisted line should reflect 'target's new position"
+			)
+		end)
+
+		it("syncs bookmark.line from the tracking extmark before persisting", function()
+			-- The visual extmark moves with edits, but bookmark.line is never
+			-- reassigned after creation. Without this sync, the file on disk
+			-- pins the bookmark to its original line forever — exactly what
+			-- issue #72 reports. Save must pull the current extmark position
+			-- and write that, so a reload places the bookmark where the user
+			-- last saw it visually.
+			local display = require("haunt.display")
+
+			local tmpfile = vim.fn.tempname() .. ".lua"
+			local bufnr = vim.api.nvim_create_buf(false, false)
+			vim.api.nvim_buf_set_name(bufnr, tmpfile)
+			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {
+				"line 1",
+				"line 2",
+				"line 3",
+				"line 4",
+				"line 5",
+				"line 6",
+			})
+
+			local extmark_id = display.set_bookmark_mark(bufnr, { line = 5 })
+			assert.is_not_nil(extmark_id)
+
+			store.add_bookmark({
+				file = tmpfile,
+				line = 5,
+				id = "drift_test",
+				extmark_id = extmark_id,
+			})
+
+			vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, { "new 1", "new 2", "new 3" })
+			assert.are.equal(8, display.get_extmark_line(bufnr, extmark_id))
+
+			store.save()
+
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+
+			assert.is_not_nil(mock_persistence.saved_bookmarks)
+			assert.are.equal(1, #mock_persistence.saved_bookmarks)
+			assert.are.equal(
+				8,
+				mock_persistence.saved_bookmarks[1].line,
+				"expected save to capture the extmark's current line, not the stale bookmark.line"
+			)
+		end)
 	end)
 
 	describe("load", function()

@@ -220,4 +220,104 @@ describe("haunt.utils", function()
 			assert.is_false(helpers.is_quickfix_open())
 		end)
 	end)
+
+	describe("to_relative", function()
+		it("returns relative path for file inside project", function()
+			local result = utils.to_relative("/proj/src/main.lua", "/proj")
+			assert.are.equal("src/main.lua", result)
+		end)
+
+		it("returns nil for file outside project", function()
+			local result = utils.to_relative("/etc/hosts", "/proj")
+			assert.is_nil(result)
+		end)
+
+		it("returns nil when path equals project_root", function()
+			local result = utils.to_relative("/proj", "/proj")
+			assert.is_nil(result)
+		end)
+
+		it("handles trailing slash on project_root", function()
+			local result = utils.to_relative("/proj/src/main.lua", "/proj/")
+			assert.are.equal("src/main.lua", result)
+		end)
+
+		it("returns nil for equal path with trailing slash on project_root", function()
+			local result = utils.to_relative("/proj", "/proj/")
+			assert.is_nil(result)
+		end)
+
+		it("handles deeply nested files", function()
+			local result = utils.to_relative("/proj/a/b/c.lua", "/proj")
+			assert.are.equal("a/b/c.lua", result)
+		end)
+
+		it("does not match adjacent path with shared string prefix", function()
+			-- /proj-other shares a string prefix with /proj but is not within it
+			local result = utils.to_relative("/proj-other/file.lua", "/proj")
+			assert.is_nil(result)
+		end)
+
+		it("normalizes redundant separators in inputs", function()
+			local result = utils.to_relative("/proj//src///main.lua", "/proj")
+			assert.are.equal("src/main.lua", result)
+		end)
+	end)
+
+	describe("to_absolute", function()
+		it("joins project_root and relative_path", function()
+			local result = utils.to_absolute("src/main.lua", "/proj")
+			assert.are.equal("/proj/src/main.lua", result)
+		end)
+
+		it("handles trailing slash on project_root", function()
+			local result = utils.to_absolute("src/main.lua", "/proj/")
+			assert.are.equal("/proj/src/main.lua", result)
+		end)
+
+		it("normalizes redundant separators", function()
+			local result = utils.to_absolute("src//main.lua", "/proj")
+			assert.are.equal("/proj/src/main.lua", result)
+		end)
+
+		it("returns project_root for '.' relative path", function()
+			local result = utils.to_absolute(".", "/proj")
+			assert.are.equal("/proj", result)
+		end)
+
+		it("round-trips with to_relative", function()
+			local abs = "/proj/a/b/c.lua"
+			local root = "/proj"
+			local rel = utils.to_relative(abs, root)
+			assert.are.equal(abs, utils.to_absolute(rel, root))
+		end)
+	end)
+
+	describe("is_within_project", function()
+		it("returns true for file inside project", function()
+			assert.is_true(utils.is_within_project("/proj/src/main.lua", "/proj"))
+		end)
+
+		it("returns false for file outside project", function()
+			assert.is_false(utils.is_within_project("/etc/hosts", "/proj"))
+		end)
+
+		it("returns true when path equals project_root", function()
+			assert.is_true(utils.is_within_project("/proj", "/proj"))
+		end)
+
+		it("returns false for adjacent path that shares string prefix", function()
+			-- This is the easy bug: /proj-other should NOT be within /proj
+			assert.is_false(utils.is_within_project("/proj-other/file.lua", "/proj"))
+		end)
+
+		it("handles trailing slash on project_root", function()
+			assert.is_true(utils.is_within_project("/proj/src/main.lua", "/proj/"))
+			assert.is_true(utils.is_within_project("/proj", "/proj/"))
+		end)
+
+		it("returns true for deeply nested file", function()
+			assert.is_true(utils.is_within_project("/proj/a/b/c/d.lua", "/proj"))
+		end)
+	end)
 end)
