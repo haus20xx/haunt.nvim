@@ -15,6 +15,7 @@
 --- `:HauntClearAll` - Clear all bookmarks across all files
 --- `:HauntChangeDataDir [path]` - Change bookmark data directory (for project-specific bookmarks)
 --- `:HauntMigrate` - Migrate bookmarks from v1 to v2 storage (project-relative paths)
+--- `:HauntReload` - Reload bookmarks from disk (e.g. after switching branches externally)
 ---
 
 -- haunt.nvim plugin loader
@@ -44,6 +45,7 @@ local commands = {
 	HauntQf = { fn = "to_quickfix", desc = "Send Buffer Annotations to Quickfix List", args = { current_buffer = true } },
 	HauntQfAll = { fn = "to_quickfix", desc = "Send All Annotations to Quickfix List" },
 	HauntChangeDataDir = { fn = "change_data_dir", desc = "Change bookmark data directory", has_args = true },
+	HauntReload = { fn = "reload", desc = "Reload bookmarks from disk" },
 }
 
 for name, info in pairs(commands) do
