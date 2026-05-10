@@ -286,8 +286,10 @@ local function _once(event, fn)
 	end
 	local wrapper
 	wrapper = function(ctx)
-		fn(ctx)
+		-- Unregister before invoking the user fn so an exception in fn cannot
+		-- leave the wrapper permanently registered (and re-firing on each emit).
 		_off(event, wrapper)
+		fn(ctx)
 	end
 	return _on(event, wrapper)
 end

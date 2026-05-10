@@ -150,6 +150,23 @@ describe("haunt.hooks", function()
 			assert.are.equal(1, once_count)
 			assert.are.equal(2, on_count)
 		end)
+
+		it("unregisters the wrapper even when the callback errors", function()
+			local call_count = 0
+			hooks.once_create(function()
+				call_count = call_count + 1
+				error("intentional test error")
+			end)
+
+			-- First emit: callback errors. The wrapper must still be removed,
+			-- otherwise a "once" handler that ever throws becomes a permanently
+			-- registered error generator.
+			hooks.emit_create({})
+			hooks.emit_create({})
+			hooks.emit_create({})
+
+			assert.are.equal(1, call_count)
+		end)
 	end)
 
 	describe("integration with api", function()
