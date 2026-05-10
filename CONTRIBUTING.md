@@ -41,15 +41,17 @@ return {
 
 `project.lua` - Project root, branch, and project-id detection, with cached git lookups/logic.
 
-`store.lua` - In memory operations on bookmarks
-
 `picker.lua` - Picker integrations, currently that is [snacks.nvim](https://github.com/folke/snacks.nvim) and [telescope](https://github.com/nvim-telescope/telescope.nvim). We have each picker implement the `PickerModule` interface. This makes referencing the different picker much easier, and only gives us what we need. Unfortunately, each picker has a different `opts` structure. Which means we can't really type the `opts` well in `picker.show(opts?)`. Oh well. 
+
+`store.lua` - In memory operations on bookmarks
 
 `sidekick.lua` - [Sidekick.nvim](https://github.com/folke/sidekick.nvim) integration 
 
 `restoration.lua` - Restoring annotations on buffer load
 
 `utils.lua` - various helper functions.
+
+`watcher.lua` - watching for changed in the `.git/HEAD` for event driven git branch updates.
 
 Adhere to these separations as much as possible.
 

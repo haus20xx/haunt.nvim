@@ -865,6 +865,11 @@ function M.reload()
 		end
 	end
 
+	-- Re-target the branch watcher: the gitdir may have changed (cross-project
+	-- :cd, worktree switch). Within the same repo this is a cheap no-op since
+	-- start() short-circuits when already watching the right HEAD path.
+	require("haunt.watcher").restart()
+
 	return true
 end
 

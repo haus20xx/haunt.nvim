@@ -27,6 +27,7 @@ describe("haunt user commands", function()
 			"HauntQf",
 			"HauntQfAll",
 			"HauntMigrate",
+			"HauntReload",
 		}
 
 		for _, cmd in ipairs(expected_commands) do
@@ -332,6 +333,24 @@ describe("haunt user commands", function()
 				end
 			end
 			assert.is_true(saw_warn, "expected a WARN notify mentioning 'not in a git repo'")
+		end)
+	end)
+
+	describe("HauntReload", function()
+		it("invokes api.reload()", function()
+			local original_reload = api.reload
+			local call_count = 0
+			api.reload = function()
+				call_count = call_count + 1
+				return true
+			end
+
+			local ok, err = pcall(vim.cmd, "HauntReload")
+
+			api.reload = original_reload
+
+			assert.is_true(ok, "HauntReload raised an error: " .. tostring(err))
+			assert.are.equal(1, call_count)
 		end)
 	end)
 

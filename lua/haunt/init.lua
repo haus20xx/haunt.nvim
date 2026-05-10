@@ -275,6 +275,9 @@ function M._setup_restoration_autocmd()
 	end
 
 	require("haunt.migration").ensure_done()
+
+	-- Auto-reload bookmarks on branch checkout (watches <gitdir>/HEAD).
+	require("haunt.watcher").start()
 end
 
 -- Check if any bookmarks exist
@@ -293,6 +296,8 @@ function M.setup_autocmds()
 		group = augroup,
 		pattern = "*",
 		callback = function()
+			require("haunt.watcher").stop()
+
 			if not has_bookmarks() then
 				return
 			end

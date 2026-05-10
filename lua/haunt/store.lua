@@ -16,6 +16,7 @@
 ---@field get_all_raw fun(): Bookmark[]
 ---@field get_loaded_project_id fun(): string|nil
 ---@field get_loaded_project_root fun(): string|nil
+---@field get_loaded_storage_path fun(): string|nil
 ---@field _reset_for_testing fun()
 
 ---@type StoreModule
@@ -382,6 +383,15 @@ end
 ---@return string|nil
 function M.get_loaded_project_root()
 	return _loaded_project_root
+end
+
+--- The storage file path stamped onto the in-memory store at load time.
+--- Used by the branch watcher: when `<gitdir>/HEAD` changes, the watcher
+--- recomputes the project's expected storage path and reloads if it no
+--- longer matches what's in memory (i.e. the user switched branches).
+---@return string|nil
+function M.get_loaded_storage_path()
+	return _loaded_storage_path
 end
 
 --- Add a bookmark to the store

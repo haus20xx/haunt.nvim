@@ -217,6 +217,7 @@ Or you can use the user commands:
 `HauntQfAll`
 `HauntChangeDataDir [path]`
 `HauntMigrate` - manually migrate an old (v1) bookmark file to the current (v2) on-disk format. Migration runs automatically on `setup()`, so this is only an escape hatch for projects where the auto-migration didn't run.
+`HauntReload` - reload bookmarks from disk. haunt.nvim watches the project's git directory via libuv `fs_event` (kernel-level: inotify on Linux, FSEvents on macOS) and reloads automatically when you switch branches, but this command is available for the rare case you need to force it.
 
 It should be pretty obvious what these do.
 

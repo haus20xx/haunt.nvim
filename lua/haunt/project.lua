@@ -19,6 +19,7 @@
 ---@field invalidate fun()
 ---@field setup_autocmds fun()
 ---@field handle_dir_change fun(scope?: string)
+---@field run_git fun(cmd: string): string[]|nil
 
 ---@private
 ---@type ProjectModule
@@ -40,7 +41,7 @@ local _git_warning_shown = false
 --- Handles "git not installed" (exit 127) gracefully with a one-time debug notify.
 ---@param cmd string The git command to run
 ---@return string[]|nil lines Output lines on success (exit 0), or nil otherwise
-local function run_git(cmd)
+function M.run_git(cmd)
 	local result = vim.fn.systemlist(cmd)
 	local exit_code = vim.v.shell_error
 
@@ -61,7 +62,7 @@ end
 
 ---@return string|nil root
 local function get_root()
-	local result = run_git("git rev-parse --show-toplevel")
+	local result = M.run_git("git rev-parse --show-toplevel")
 	if result and result[1] and result[1] ~= "" then
 		return result[1]
 	end
@@ -70,7 +71,7 @@ end
 
 ---@return string|nil branch
 local function get_branch()
-	local result = run_git("git branch --show-current")
+	local result = M.run_git("git branch --show-current")
 	if not result then
 		return nil
 	end
@@ -81,7 +82,7 @@ local function get_branch()
 	end
 
 	-- Detached HEAD (e.g. tag checkout): identify by short commit hash instead
-	local hash_result = run_git("git rev-parse --short HEAD")
+	local hash_result = M.run_git("git rev-parse --short HEAD")
 	if hash_result and hash_result[1] and hash_result[1] ~= "" then
 		return hash_result[1]
 	end
@@ -92,7 +93,7 @@ end
 ---@param root string|nil
 ---@return string project_id
 local function project_id_with_root(root)
-	local result = run_git("git rev-list --max-parents=0 HEAD")
+	local result = M.run_git("git rev-list --max-parents=0 HEAD")
 	if result and result[1] and result[1] ~= "" then
 		return result[1]
 	end
