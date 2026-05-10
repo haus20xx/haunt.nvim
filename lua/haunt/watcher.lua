@@ -55,6 +55,7 @@ local function close_handle()
 	end
 	_handle = nil
 	_watched_target = nil
+	_watched_gitdir = nil
 end
 
 local function close_debounce()
