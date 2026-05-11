@@ -2,6 +2,30 @@
 
 ![IMG_0236(1)](https://github.com/user-attachments/assets/de341829-817b-4276-8e72-bb6bf61261b1)
 
+## Showcase
+
+<table>
+  <tr>
+    <td width="50%">
+      <video src="https://github.com/user-attachments/assets/717ccc85-a14f-4dff-b496-b448750c33e1"></video><br/>
+      <b>General Usage</b>
+    </td>
+    <td width="50%">
+      <video src="https://github.com/user-attachments/assets/da112d01-b0bc-445d-8d60-edc324c5f31b"></video><br/>
+      <b>Picker</b>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <video src="https://github.com/user-attachments/assets/390c7301-757c-4248-9623-0300ff872376"></video><br/>
+      <b>Sidekick Integration</b>
+    </td>
+    <td width="50%">
+      <video src="https://github.com/user-attachments/assets/1d2b996c-b0be-459c-9ff0-63e7a1ebb936"></video><br/>
+      <b>Git Branch Scope</b>
+    </td>
+  </tr>
+</table>
 
 Hear the ghosts tell you where you were, and why you were there.
 
@@ -13,6 +37,7 @@ Keep your mental overhead to a minimum and never repeatedly rummage through your
 
 <!--toc:start-->
 - [`haunt.nvim` 👻](#hauntnvim-👻)
+  - [Showcase](#showcase)
   - [Features](#features)
   - [Requirements](#requirements)
   - [Installation](#installation)
@@ -142,8 +167,6 @@ return {
 
 ### API
 
-https://github.com/user-attachments/assets/717ccc85-a14f-4dff-b496-b448750c33e1
-
 By default, haunt.nvim provides ***no default keymaps***. You will have to set them up yourself. See the installation section for an example.
 The installation section includes some recommended keymaps to get you started.
 You can also just use the user commands, which we will talk about later.
@@ -206,31 +229,44 @@ haunt.change_data_dir(nil) -- reset to default
 ### User Commands
 
 Or you can use the user commands: 
-`HauntAnnotate`
-`HauntClear`
-`HauntClearAll`
-`HauntDelete`
-`HauntList`
-`HauntNext`
-`HauntPrev`
-`HauntQf`
-`HauntQfAll`
-`HauntChangeDataDir [path]`
-`HauntMigrate` - manually migrate an old (v1) bookmark file to the current (v2) on-disk format. Migration runs automatically on `setup()`, so this is only an escape hatch for projects where the auto-migration didn't run.
-`HauntReload` - reload bookmarks from disk. haunt.nvim watches the project's git directory via libuv `fs_event` (kernel-level: inotify on Linux, FSEvents on macOS) and reloads automatically when you switch branches, but this command is available for the rare case you need to force it.
 
-It should be pretty obvious what these do.
+`HauntAnnotate`
+
+`HauntClear`
+
+`HauntClearAll`
+
+`HauntDelete`
+
+`HauntList`
+
+`HauntNext`
+
+`HauntPrev`
+
+`HauntQf`
+
+`HauntQfAll`
+
+`HauntChangeDataDir [path]`
+
+`HauntMigrate` 
+
+`HauntReload`
+
+Take a look at `:h haunt-commands` for more details on each command, and examples of how to use them.
 
 If you wanna script something with this plugin, take a look at `:h haunt`.
 I tried my best to expose as many useful functions as possible.
 
 ## Integrations 
 
-### Picker (snacks.nvim / telescope.nvim / fzf-lua)
+### Picker (`snacks.nvim` / `telescope.nvim` / `fzf-lua`)
+
+<details>
+  <summary>Click to expand</summary>
 
 Search, edit, and delete annotations from the picker using `snacks.nvim`, `telescope.nvim`, or `fzf-lua`.
-
-https://github.com/user-attachments/assets/da112d01-b0bc-445d-8d60-edc324c5f31b
 
 By default, haunt.nvim uses `"auto"` mode which tries Snacks first, then Telescope, then fzf-lua, then falls back to `vim.ui.select`.
 
@@ -261,12 +297,14 @@ return {
 - `<CR>`: Jump to the selected bookmark
 - `d` (normal mode): Delete the selected bookmark
 - `a` (normal mode): Edit the bookmark's annotation
+</details>
 
-### sidekick.nvim
+### `sidekick.nvim`
+
+<details>
+  <summary>Click to expand</summary>
 
 Send the position of your annotations to your favorite CLI tool through sidekick
-
-https://github.com/user-attachments/assets/390c7301-757c-4248-9623-0300ff872376
 
 Add this to your sidekick configuration:
 
@@ -292,12 +330,9 @@ return {
 }
 ```
 
-### Git
-Keep your annotations scoped to your branches.
+</details>
 
-https://github.com/user-attachments/assets/1d2b996c-b0be-459c-9ff0-63e7a1ebb936
-
-#### Persistence, Sharing, and Migration
+## Persistence, Sharing, and Migration
 
 Bookmarks are saved as one JSON file per project, per branch, keyed by your
 git root commit, with project-relative paths inside.
@@ -319,7 +354,8 @@ The goal of this was to be flexible enough to support a variety of workflows, wh
 
 Have fun!
 
-### Project-Specific Bookmarks
+## Project-Specific Bookmarks
+
 Use `change_data_dir` to scope bookmarks per project/directory:
 
 ``` lua
@@ -347,11 +383,9 @@ I hope this helps others with the same issues.
 
 ## Acknowledgements
 
-- folke for snacks.nvim and sidekick.nvim. I use these plugins hundreds of times a day and they are amazing
-  * The API was extremely easy to work with. I also stole his CI/CD for my tests
-- nvim-telescope team for telescope.nvim
-- echasnovski for the mini.docs template. Having a way to automatically generate documentation from annotations
-  is a lifesaver
+- folke for snacks.nvim and sidekick.nvim, the API was extremely easy to work with
+- `nvim-telescope` team for telescope.nvim
+- `mini.nvim` for the `mini.docs` template
   
 ## Similar Plugins
 
@@ -359,13 +393,3 @@ I hope this helps others with the same issues.
 - [spelunk.nvim](https://github.com/EvWilson/spelunk.nvim)
 - [marks.nvim](https://github.com/chentoast/marks.nvim)
 - [vim-bookmarks](https://github.com/MattesGroeger/vim-bookmarks)
-
-<details>
-
-<summary>Possible Improvement</summary>
-
-- [ ] Users should be able to toggle notification. add a 'notify' option to config.
-this can take in a boolean, or a logging level. then, in the program, we can use
-a custom logger that uses vim.notify. we are gonna wanna use closure to store the log level and avoid recomputes
-
-</details>

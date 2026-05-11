@@ -71,9 +71,20 @@ local _loaded_storage_path = nil
 local persistence = nil
 
 ---@private
+---@type HooksModule|nil
+local hooks = nil
+
+---@private
 local function ensure_persistence()
 	if not persistence then
 		persistence = require("haunt.persistence")
+	end
+end
+
+---@private
+local function ensure_hooks()
+	if not hooks then
+		hooks = require("haunt.hooks")
 	end
 end
 
@@ -294,6 +305,12 @@ end
 --- This is called automatically when needed. You typically don't need
 --- to call this manually unless you want to reload bookmarks from disk.
 ---
+--- Returns false when persistence reports a load failure (unreadable file,
+--- malformed JSON, unsupported version). In that case the in-memory store
+--- is left untouched, `_loaded` is not set, and `on_load` is NOT emitted —
+--- observers only see successful loads. A fresh user with no storage file
+--- is a successful load with zero bookmarks (returns true).
+---
 ---@return boolean success True if load succeeded
 function M.load()
 	if _loaded then
@@ -301,18 +318,28 @@ function M.load()
 	end
 
 	ensure_persistence()
+	ensure_hooks()
 	---@cast persistence -nil
+	---@cast hooks -nil
+
 	local loaded_bookmarks = persistence.load_bookmarks()
-	if loaded_bookmarks then
-		bookmarks = loaded_bookmarks
-		rebuild_file_index()
+	if not loaded_bookmarks then
+		return false
 	end
+
+	bookmarks = loaded_bookmarks
+	rebuild_file_index()
 	_loaded = true
 
 	local info = require("haunt.project").get_info()
 	_loaded_project_id = info.project_id
 	_loaded_project_root = info.root
 	_loaded_storage_path = persistence.get_storage_path()
+
+	hooks.emit_load({
+		bookmarks = bookmarks,
+		count = #bookmarks,
+	})
 
 	return true
 end
@@ -366,9 +393,26 @@ end
 ---@return boolean success True if save succeeded
 function M.save()
 	ensure_persistence()
+	ensure_hooks()
 	---@cast persistence -nil
+	---@cast hooks -nil
+
 	sync_lines_from_extmarks()
-	return persistence.save_bookmarks(bookmarks, _loaded_storage_path, _loaded_project_root)
+
+	hooks.emit_pre_save({
+		bookmarks = bookmarks,
+		count = #bookmarks,
+	})
+
+	local success = persistence.save_bookmarks(bookmarks, _loaded_storage_path, _loaded_project_root)
+
+	hooks.emit_post_save({
+		bookmarks = bookmarks,
+		count = #bookmarks,
+		success = success,
+	})
+
+	return success
 end
 
 --- The project_id stamped onto the in-memory store. Used by the dir-change
